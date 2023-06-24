@@ -1,23 +1,15 @@
-use anyhow::Result;
-use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use spin_sdk::{
-    config,
-    http::{Request, Response},
-    http_component,
-};
-use tracing::{debug, info};
 
 #[derive(Serialize, Deserialize, Debug)]
 
-struct AuthenticateResult {
-    token: String,
+pub struct AuthenticateResult {
+    pub token: String,
     #[serde(rename = "customerProfile")]
-    customer_profile: CustomerProfile,
+    pub customer_profile: CustomerProfile,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct CustomerProfile {
+pub struct CustomerProfile {
     username: String,
     email: String,
     #[serde(rename = "firstName")]
@@ -29,7 +21,7 @@ struct CustomerProfile {
     #[serde(rename = "countryCode")]
     country_code: String,
     title: String,
-    uuid: String,
+    pub uuid: String,
     #[serde(rename = "mobileNo")]
     mobile_no: Option<String>,
     dob: Option<String>,
@@ -47,12 +39,12 @@ struct CustomerProfile {
     has_unread_notifications: bool,
 }
 #[derive(Serialize, Deserialize, Debug)]
-struct Extras {
+pub struct Extras {
     #[serde(rename = "hasPurchasedCars")]
     has_purchased_cars: bool,
 }
 #[derive(Serialize, Deserialize, Debug)]
-struct Address {
+pub struct Address {
     #[serde(rename = "addressLine1")]
     address_line1: String,
     #[serde(rename = "addressLine2")]
@@ -65,7 +57,7 @@ struct Address {
     id: i32,
 }
 #[derive(Serialize, Deserialize, Debug)]
-struct CommPref {
+pub struct CommPref {
     sms: bool,
     tel: bool,
     email: bool,
@@ -75,13 +67,13 @@ struct CommPref {
     language: String,
 }
 #[derive(Serialize, Deserialize, Debug)]
-struct Email {
+pub struct Email {
     email: String,
     preferred: bool,
     primary: bool,
 }
 #[derive(Serialize, Deserialize, Debug)]
-struct Phone {
+pub struct Phone {
     phone: String,
     preferred: bool,
     r#type: String,
@@ -89,24 +81,24 @@ struct Phone {
 }
 
 #[derive(Serialize, Deserialize)]
-struct Authenticate {
-    username: String,
-    password: String,
+pub struct Authenticate {
+    pub username: String,
+    pub password: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 
-struct VehicleInfo {
+pub struct VehicleInfo {
     #[serde(rename = "AcquisitionDatetime")]
     acquisition_datetime: String,
     #[serde(rename = "RemoteHvacInfo")]
     remote_hvac_info: RemoteHvacInfo,
     #[serde(rename = "ChargeInfo")]
-    charge_info: ChargeInfo,
+    pub charge_info: ChargeInfo,
 }
 #[derive(Serialize, Deserialize, Debug)]
 
-struct RemoteHvacInfo {
+pub struct RemoteHvacInfo {
     #[serde(rename = "Temperaturelevel")]
     temperature_level: i32,
     #[serde(rename = "SettingTemperature")]
@@ -127,7 +119,7 @@ struct RemoteHvacInfo {
 
 #[derive(Serialize, Deserialize, Debug)]
 
-struct ChargeInfo {
+pub struct ChargeInfo {
     #[serde(rename = "EvDistanceInKm")]
     ev_distance_in_km: f32,
     #[serde(rename = "GasolineTravelableDistanceUnit")]
@@ -159,77 +151,16 @@ struct ChargeInfo {
     #[serde(rename = "EvTravelableDistanceSubtractionRate")]
     ev_travelable_distance_subtraction_rate: i32,
     #[serde(rename = "ChargeRemainingAmount")]
-    charge_remaining_amount: i32,
+    pub charge_remaining_amount: i32,
     #[serde(rename = "SettingChangeAcceptanceStatus")]
     setting_change_acceptance_status: i32,
     #[serde(rename = "ChargeType")]
     charge_type: i32,
 }
 #[derive(Serialize, Deserialize, Debug)]
-struct RemoteControlStatus {
+pub struct RemoteControlStatus {
     #[serde(rename = "VehicleInfo")]
-    vehicle_info: VehicleInfo,
+    pub vehicle_info: VehicleInfo,
     #[serde(rename = "ReturnCode")]
     return_code: String,
-}
-
-/// Send an HTTP request and return the response.
-#[http_component]
-fn send_outbound(_req: Request) -> Result<Response> {
-    let address = Authenticate {
-        username: config::get("username").expect("could not get variable username"),
-        password: config::get("password").expect("could not get variable password"),
-    };
-    let string_address = serde_json::to_string(&address).unwrap();
-    let bytes_address = Some(Bytes::from(string_address));
-    let request = http::Request::builder()
-        .method("POST")
-        .uri("https://ssoms.toyota-europe.com/authenticate")
-        .header("content-type", "application/json")
-        .header("X-TME-BRAND", "TOYOTA")
-        .header("X-TME-LC", "de-de")
-        .header("Sec-Fetch-Dest", "empty")
-        .header("Accept", "application/json, text/plain, */*")
-        .body(bytes_address)?;
-    //println!("{:?}", request);
-    let result = spin_sdk::outbound_http::send_request(request).unwrap();
-    if let Some(body) = &result.body().clone() {
-        let body = String::from_utf8(body.to_vec()).unwrap();
-        debug!("Body: {:?}", body);
-        let result: AuthenticateResult = serde_json::from_str(&body).unwrap();
-        info!("Struct: {:?}", result);
-
-        let status = format!(
-            "https://myt-agg.toyota-europe.com/cma/api/vehicles/{}/remoteControl/status",
-            config::get("vin").expect("could not get variable vin")
-        );
-        let cookie: String = format!("iPlanetDirectoryPro={}", result.token);
-        let request: Request = http::Request::builder()
-            .method("GET")
-            .uri(status)
-            .header("content-type", "application/json")
-            .header("X-TME-APP-VERSION", "4.10.0")
-            .header("X-TME-BRAND", "TOYOTA")
-            .header("X-TME-LOCALE", "de-de")
-            .header("Accept", "application/json, text/plain, */*")
-            .header("Cookie", cookie)
-            .header("UUID", result.customer_profile.uuid)
-            .body(None)?;
-        let result = spin_sdk::outbound_http::send_request(request).unwrap();
-        if let Some(body) = &result.body().clone() {
-            let body = String::from_utf8(body.to_vec()).unwrap();
-            debug!("Body: {:?}", body);
-            let remote_control_status: RemoteControlStatus = serde_json::from_str(&body).unwrap();
-            println!("SOC: {:?}", remote_control_status.vehicle_info.charge_info.charge_remaining_amount);
-        }
-        //println!("{:?}", result);
-        let mut res = result;
-        res.headers_mut()
-            .insert("spin-component", "rust-outbound-http".try_into()?);
-        debug!("{:?}", res);
-        Ok(res)
-    } else {
-        let res = Response::new(None);
-        Ok(res)
-    }
 }

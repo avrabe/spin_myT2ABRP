@@ -97,21 +97,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 
 [[package]]
-name = "myt"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "myt2abrp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytes",
  "http",
- "myt",
  "serde",
  "serde_json",
  "spin-sdk",
