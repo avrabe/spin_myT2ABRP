@@ -1,4 +1,4 @@
-# Toyota MyT (Europe) to A Better Route Planner Gateway using Fermyon Spin
+# Inofficial Toyota MyT (Europe) to A Better Route Planner Gateway using Fermyon Spin
 
 Goal is to provide a gateway between the Toyota MyT (Europe) and A Better Route Planner for Telemetry information. The Toyota MyT uses an inofficial API described in [tojota]. So any change from Toyota might break this application.
 
