@@ -37,6 +37,7 @@ jobs:
           toolchain: stable
           components: clippy
           override: true
+          target: wasm32-wasi
 
       - name: Install required cargo
         run: cargo install clippy-sarif sarif-fmt
