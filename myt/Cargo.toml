@@ -1,0 +1,13 @@
+[package]
+name = "myt"
+version = "0.1.0"
+authors = ["Ralf Anton Beier <ralf_beier@me.com>"]
+description = "inofficial Toyota MyT (Europe) connector"
+edition = "2021"
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = { version = "1.0.25", features = ["derive"]}
+serde_json = { version = "1.0" }

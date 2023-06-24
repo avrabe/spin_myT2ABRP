@@ -20,7 +20,7 @@ route = "/..."
 [component.build]
 command = "cargo build --target wasm32-wasi --release"
 # Example watch configuration for a Rust application
-watch = ["src/**/*.rs", "Cargo.toml"]
+watch = ["myt2abrp/src/**/*.rs", "myt2abrp/Cargo.toml", "Cargo.toml"]
 [component.config]
 password = "{{ password }}"
 username = "{{ username }}"
