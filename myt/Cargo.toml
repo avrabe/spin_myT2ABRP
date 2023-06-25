@@ -9,5 +9,7 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# Crate to simplify working with bytes.
+bytes = "1"
 serde = { version = "1.0.25", features = ["derive"]}
 serde_json = { version = "1.0" }

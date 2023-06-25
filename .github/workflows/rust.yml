@@ -24,12 +24,12 @@ jobs:
       - name: Enable cache
         uses: Swatinem/rust-cache@v2
       - run: cargo install cargo-checkmate
-      - run: cargo checkmate audit
-      - run: cargo checkmate build
-      - run: cargo checkmate check
-      - run: cargo checkmate clippy
-      - run: cargo checkmate fmt
-      - run: cargo checkmate doc
+      - run: cargo checkmate run audit
+      - run: cargo checkmate run build
+      - run: cargo checkmate run check
+      - run: cargo checkmate run clippy
+      - run: cargo checkmate run format
+      - run: cargo checkmate run doc
 
   semver-check:
     runs-on: ubuntu-latest
