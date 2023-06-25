@@ -1,5 +1,6 @@
+use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-
+use std::{convert::From, option::Option};
 #[derive(Serialize, Deserialize, Debug)]
 
 pub struct AuthenticateResult {
@@ -163,4 +164,26 @@ pub struct RemoteControlStatus {
     pub vehicle_info: VehicleInfo,
     #[serde(rename = "ReturnCode")]
     return_code: String,
+}
+
+impl Authenticate {
+    pub fn new(username: String, password: String) -> Authenticate {
+        Authenticate { username, password }
+    }
+}
+
+impl From<Authenticate> for Option<Bytes> {
+    fn from(item: Authenticate) -> Self {
+        let string_address = serde_json::to_string(&item).unwrap();
+        Some(Bytes::from(string_address))
+    }
+}
+
+impl From<&Option<Bytes>> for AuthenticateResult {
+    fn from(item: &Option<Bytes>) -> Self {
+        let result = item.clone().unwrap();
+        let result = String::from_utf8(result.to_vec()).unwrap();
+        let result: AuthenticateResult = serde_json::from_str(&result).unwrap();
+        result
+    }
 }
