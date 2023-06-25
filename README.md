@@ -1,5 +1,7 @@
 # Inofficial Toyota MyT (Europe) to A Better Route Planner Gateway using Fermyon Spin
 
+[![Rust](https://github.com/avrabe/spin_myT2ABRP/actions/workflows/rust.yml/badge.svg)](https://github.com/avrabe/spin_myT2ABRP/actions/workflows/rust.yml)
+
 Goal is to provide a gateway between the Toyota MyT (Europe) and A Better Route Planner for Telemetry information. The Toyota MyT uses an inofficial API described in [tojota]. So any change from Toyota might break this application.
 
 ## Setup the development environment

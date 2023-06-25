@@ -1,12 +1,24 @@
 use anyhow::Result;
 use bytes::Bytes;
 use myt::{Authenticate, AuthenticateResult, RemoteControlStatus};
+use serde::{Deserialize, Serialize};
 use spin_sdk::{
     config,
     http::{Request, Response},
     http_component,
 };
-use tracing::debug;
+
+#[derive(Serialize, Deserialize, Debug)]
+struct CurrentStatus {
+    pub soc: i32,
+    pub access_date: String,
+}
+
+impl CurrentStatus {
+    pub fn new(soc: i32, access_date: String) -> CurrentStatus {
+        CurrentStatus { soc, access_date }
+    }
+}
 
 /// Send an HTTP request and return the response.
 #[http_component]
@@ -50,21 +62,18 @@ fn send_outbound(_req: Request) -> Result<Response> {
         .header("UUID", result.customer_profile.uuid)
         .body(None)?;
     let result = spin_sdk::outbound_http::send_request(request).unwrap();
-    if let Some(body) = &result.body().clone() {
-        let body = String::from_utf8(body.to_vec()).unwrap();
-        debug!("Body: {:?}", body);
-        let remote_control_status: RemoteControlStatus = serde_json::from_str(&body).unwrap();
-        println!(
-            "SOC: {:?}",
-            remote_control_status
-                .vehicle_info
-                .charge_info
-                .charge_remaining_amount
-        );
-    }
+    let remote_control_status: RemoteControlStatus = result.body().into();
+    let return_value = CurrentStatus::new(
+        remote_control_status
+            .vehicle_info
+            .charge_info
+            .charge_remaining_amount,
+        remote_control_status.vehicle_info.acquisition_datetime,
+    );
+    let return_value = serde_json::to_string(&return_value).unwrap();
+    println!("{}", return_value);
     //println!("{:?}", result);
     //let mut res: http::Response<Option<Bytes>> = result;
-    let res = Response::new(Some(Bytes::from("foo")));
-    debug!("{:?}", res);
+    let res = Response::new(Some(Bytes::from(return_value)));
     Ok(res)
 }
