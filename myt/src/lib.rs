@@ -91,7 +91,7 @@ pub struct Authenticate {
 
 pub struct VehicleInfo {
     #[serde(rename = "AcquisitionDatetime")]
-    acquisition_datetime: String,
+    pub acquisition_datetime: String,
     #[serde(rename = "RemoteHvacInfo")]
     remote_hvac_info: RemoteHvacInfo,
     #[serde(rename = "ChargeInfo")]
@@ -184,6 +184,15 @@ impl From<&Option<Bytes>> for AuthenticateResult {
         let result = item.clone().unwrap();
         let result = String::from_utf8(result.to_vec()).unwrap();
         let result: AuthenticateResult = serde_json::from_str(&result).unwrap();
+        result
+    }
+}
+
+impl From<&Option<Bytes>> for RemoteControlStatus {
+    fn from(item: &Option<Bytes>) -> Self {
+        let result = item.clone().unwrap();
+        let result = String::from_utf8(result.to_vec()).unwrap();
+        let result: RemoteControlStatus = serde_json::from_str(&result).unwrap();
         result
     }
 }
