@@ -63,17 +63,18 @@ fn send_outbound(_req: Request) -> Result<Response> {
         .body(None)?;
     let result = spin_sdk::outbound_http::send_request(request).unwrap();
     let remote_control_status: RemoteControlStatus = result.body().into();
-    let return_value = CurrentStatus::new(
-        remote_control_status
-            .vehicle_info
-            .charge_info
-            .charge_remaining_amount,
-        remote_control_status.vehicle_info.acquisition_datetime,
-    );
-    let return_value = serde_json::to_string(&return_value).unwrap();
-    println!("{}", return_value);
-    //println!("{:?}", result);
-    //let mut res: http::Response<Option<Bytes>> = result;
-    let res = Response::new(Some(Bytes::from(return_value)));
-    Ok(res)
+    if let Some(vehicle_info) = remote_control_status.vehicle_info {
+        let return_value = CurrentStatus::new(
+            vehicle_info.charge_info.charge_remaining_amount,
+            vehicle_info.acquisition_datetime,
+        );
+        let return_value = serde_json::to_string(&return_value).unwrap();
+        println!("{}", return_value);
+        //println!("{:?}", result);
+        //let mut res: http::Response<Option<Bytes>> = result;
+        let res = Response::new(Some(Bytes::from(return_value)));
+        Ok(res)
+    } else {
+        Err(anyhow::anyhow!("No vehicle info found"))
+    }
 }

@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{convert::From, option::Option};
 #[derive(Serialize, Deserialize, Debug)]
 
@@ -161,7 +161,7 @@ pub struct ChargeInfo {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RemoteControlStatus {
     #[serde(rename = "VehicleInfo")]
-    pub vehicle_info: VehicleInfo,
+    pub vehicle_info: Option<VehicleInfo>,
     #[serde(rename = "ReturnCode")]
     return_code: String,
 }
@@ -181,18 +181,33 @@ impl From<Authenticate> for Option<Bytes> {
 
 impl From<&Option<Bytes>> for AuthenticateResult {
     fn from(item: &Option<Bytes>) -> Self {
-        let result = item.clone().unwrap();
-        let result = String::from_utf8(result.to_vec()).unwrap();
-        let result: AuthenticateResult = serde_json::from_str(&result).unwrap();
-        result
+        from::<AuthenticateResult>(item)
     }
 }
 
 impl From<&Option<Bytes>> for RemoteControlStatus {
     fn from(item: &Option<Bytes>) -> Self {
-        let result = item.clone().unwrap();
-        let result = String::from_utf8(result.to_vec()).unwrap();
-        let result: RemoteControlStatus = serde_json::from_str(&result).unwrap();
-        result
+        from::<RemoteControlStatus>(item)
     }
+}
+
+fn from<D>(item: &Option<Bytes>) -> D
+where
+    D: DeserializeOwned,
+{
+    let result = item.clone().unwrap();
+    let result = String::from_utf8(result.to_vec()).unwrap();
+    let result: D = serde_json::from_str(&result).unwrap();
+    result
+}
+
+#[test]
+fn test_remote_control_status_from() {
+    let json = r#"{"ReturnCode": "OK"}"#;
+    let bytes = Bytes::from(json);
+
+    let status: RemoteControlStatus = RemoteControlStatus::from(&Some(bytes));
+    print!("{:?}", status);
+    assert_eq!("OK", status.return_code);
+    // Add assertions to verify VehicleInfo fields...
 }
