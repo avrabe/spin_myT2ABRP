@@ -11,5 +11,5 @@ license = "MIT"
 [dependencies]
 # Crate to simplify working with bytes.
 bytes = "1"
-serde = { version = "1.0.171", features = ["derive"]}
+serde = { version = "1.0.188", features = ["derive"]}
 serde_json = { version = "1.0" }
