@@ -23,5 +23,5 @@ wit-bindgen-rust = { git = "https://github.com/bytecodealliance/wit-bindgen", re
 
 serde = { version = "1.0.188", features = ["derive"]}
 serde_json = { version = "1.0" }
-tracing = { version = "0.1.25", features = ["log"] }
+tracing = { version = "0.1.39", features = ["log"] }
 myt = { path = "../myt" }
