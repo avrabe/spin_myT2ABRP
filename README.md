@@ -27,9 +27,9 @@ sudo mv spin /usr/local/bin/
 Export the secrets used
 
 ```sh
-export SPIN_CONFIG_USERNAME=joe@doe.com
-export SPIN_CONFIG_PASSWORD=mysecret
-export SPIN_CONFIG_VIN=5YFBURHE3JP743261
+export SPIN_VARIABLE_USERNAME=joe@doe.com
+export SPIN_VARIABLE_PASSWORD=mysecret
+export SPIN_VARIABLE_VIN=5YFBURHE3JP743261
 ```
 
 Build the application and start the local server

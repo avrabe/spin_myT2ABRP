@@ -13,15 +13,17 @@ crate-type = [ "cdylib" ]
 # Useful crate to handle errors.
 anyhow = "1"
 # Crate to simplify working with bytes.
-bytes = "1"
+bytes = { workspace = true }
 # General-purpose crate with common HTTP types.
-http = "0.2"
+http = "0.2.11"
 # The Spin SDK.
-spin-sdk = { git = "https://github.com/fermyon/spin", tag = "v1.4.2" }
-# Crate that generates Rust Wasm bindings from a WebAssembly interface.
-wit-bindgen-rust = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "cb871cfa1ee460b51eb1d144b175b9aab9c50aba" }
+spin-sdk = { workspace = true }
 
-serde = { version = "1.0.188", features = ["derive"]}
-serde_json = { version = "1.0" }
-tracing = { version = "0.1.25", features = ["log"] }
+# Crate that generates Rust Wasm bindings from a WebAssembly interface.
+wit-bindgen = "0.13.0"
+
+tracing = { version = "0.1.40", features = ["log"] }
 myt = { path = "../myt" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+futures = "0.3.28"
