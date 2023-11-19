@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
+use spin_sdk::http::conversions;
 use std::{convert::From, option::Option};
 #[derive(Serialize, Deserialize, Debug)]
 
@@ -21,7 +22,7 @@ pub struct CustomerProfile {
     language_code: String,
     #[serde(rename = "countryCode")]
     country_code: String,
-    title: String,
+    title: Option<String>,
     pub uuid: String,
     #[serde(rename = "mobileNo")]
     mobile_no: Option<String>,
@@ -49,7 +50,7 @@ pub struct Address {
     #[serde(rename = "addressLine1")]
     address_line1: String,
     #[serde(rename = "addressLine2")]
-    address_line2: String,
+    address_line2: Option<String>,
     country: String,
     city: String,
     postcode: String,
@@ -78,7 +79,7 @@ pub struct Phone {
     phone: String,
     preferred: bool,
     r#type: String,
-    verified: Option<String>,
+    verified: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -172,27 +173,39 @@ impl Authenticate {
     }
 }
 
-impl From<Authenticate> for Option<Bytes> {
-    fn from(item: Authenticate) -> Self {
-        let string_address = serde_json::to_string(&item).unwrap();
-        Some(Bytes::from(string_address))
+impl conversions::IntoBody for Authenticate {
+    fn into_body(self) -> Vec<u8> {
+        let string_address = serde_json::to_string(&self).unwrap();
+        Bytes::from(string_address).to_vec()
     }
 }
 
-impl From<&Option<Bytes>> for AuthenticateResult {
-    fn from(item: &Option<Bytes>) -> Self {
-        let result = item.clone().unwrap();
-        let result = String::from_utf8(result.to_vec()).unwrap();
-        let result: AuthenticateResult = serde_json::from_str(&result).unwrap();
-        result
+impl From<&Vec<u8>> for AuthenticateResult {
+    fn from(item: &Vec<u8>) -> Self {
+        let result = String::from_utf8_lossy(&item);
+        let deserializer = &mut serde_json::Deserializer::from_str(&result);
+        let result: Result<AuthenticateResult, _> = serde_path_to_error::deserialize(deserializer);
+        match result {
+            Ok(authenticate_result) => authenticate_result,
+            Err(err) => {
+                panic!("{}", err);
+            }
+        }
+        //let result: AuthenticateResult = serde_json::from_str(&result).unwrap();
+        //result
     }
 }
 
-impl From<&Option<Bytes>> for RemoteControlStatus {
-    fn from(item: &Option<Bytes>) -> Self {
-        let result = item.clone().unwrap();
-        let result = String::from_utf8(result.to_vec()).unwrap();
-        let result: RemoteControlStatus = serde_json::from_str(&result).unwrap();
-        result
+impl From<&Vec<u8>> for RemoteControlStatus {
+    fn from(item: &Vec<u8>) -> Self {
+        let result = String::from_utf8_lossy(&item);
+        let deserializer = &mut serde_json::Deserializer::from_str(&result);
+        let result: Result<RemoteControlStatus, _> = serde_path_to_error::deserialize(deserializer);
+        match result {
+            Ok(remote_control_status) => remote_control_status,
+            Err(err) => {
+                panic!("{}", err);
+            }
+        }
     }
 }

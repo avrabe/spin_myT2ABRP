@@ -10,6 +10,9 @@ license = "MIT"
 
 [dependencies]
 # Crate to simplify working with bytes.
-bytes = "1"
-serde = { version = "1.0.188", features = ["derive"]}
-serde_json = { version = "1.0" }
+bytes = { workspace = true }
+spin-sdk = { workspace = true }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_path_to_error = "0.1"
