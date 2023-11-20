@@ -195,6 +195,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "http"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b32afd38673a8016f7c9ae69e5af41a58f81b1d31689040f2f1959594ce194ea"
+dependencies = [
+ "bytes",
+ "fnv",
+ "itoa",
+]
+
+[[package]]
 name = "id-arena"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -253,7 +264,7 @@ dependencies = [
  "anyhow",
  "bytes",
  "futures",
- "http",
+ "http 1.0.0",
  "myt",
  "serde",
  "serde_json",
@@ -418,7 +429,7 @@ source = "git+https://github.com/fermyon/spin?tag=v2.0.1#1d72f1c4244ecd8f7e0f150
 dependencies = [
  "anyhow",
  "bytes",
- "http",
+ "http 0.2.11",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
@@ -434,7 +445,7 @@ dependencies = [
  "bytes",
  "form_urlencoded",
  "futures",
- "http",
+ "http 0.2.11",
  "once_cell",
  "routefinder",
  "serde",
