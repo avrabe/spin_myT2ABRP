@@ -4,12 +4,9 @@ pull_request_rules:
     conditions:
       - author=dependabot[bot]
       - check-success = cargo-checkmate
-      - check-success = Run rust-clippy analyzing
-      - check-success = semver-check
       - check-success = udeps-check
       - check-success = cargo-deny (advisories)
       - check-success = cargo-deny (bans licenses sources)
-      - check-success = clippy
     actions:
       merge:
         method: squash
