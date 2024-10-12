@@ -13,12 +13,12 @@ vin = { required = true }
 
 [[component]]
 id = "myt2abrp"
-source = "target/wasm32-wasi/release/myt2abrp.wasm"
+source = "target/wasm32-wasip1/release/myt2abrp.wasm"
 allowed_http_hosts = [ "ssoms.toyota-europe.com", "myt-agg.toyota-europe.com" ]
 [component.trigger]
 route = "/..."
 [component.build]
-command = "cargo build --target wasm32-wasi --release"
+command = "cargo build --target wasm32-wasip1 --release"
 # Example watch configuration for a Rust application
 watch = ["myt2abrp/src/**/*.rs", "myt2abrp/Cargo.toml", "Cargo.toml", "myt/src/**/*.rs", "myt/Cargo.toml"]
 [component.config]

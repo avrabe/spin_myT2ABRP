@@ -4,7 +4,8 @@ use myt::{Authenticate, AuthenticateResult, RemoteControlStatus};
 use serde::{Deserialize, Serialize};
 use spin_sdk::{
     http::{
-        send, Fields, IncomingRequest, Method, OutgoingResponse, RequestBuilder, ResponseOutparam,
+        send, Fields, IncomingRequest, Method, OutgoingResponse, Request, Response,
+        ResponseOutparam,
     },
     http_component, variables,
 };
@@ -27,7 +28,8 @@ async fn handle_request(_request: IncomingRequest, response_out: ResponseOutpara
     let username = variables::get("username").expect("could not get variable username");
     let password = variables::get("password").expect("could not get variable password");
     let address = Authenticate::new(username, password);
-    let request = RequestBuilder::new(Method::Post, "https://ssoms.toyota-europe.com/authenticate")
+    // Send the request and await the response
+    let request = Request::builder()
         .method(Method::Post)
         .header("content-type", "application/json")
         .header("X-TME-BRAND", "TOYOTA")
@@ -35,9 +37,11 @@ async fn handle_request(_request: IncomingRequest, response_out: ResponseOutpara
         .header("Sec-Fetch-Dest", "empty")
         .header("Accept", "application/json, text/plain, */*")
         .body(address)
+        .uri("https://ssoms.toyota-europe.com/authenticate")
         .build();
+
     //println!("{:?}", request);
-    let result: Result<http::Response<Vec<u8>>, spin_sdk::http::SendError> = send(request).await;
+    let result: Result<Response, spin_sdk::http::SendError> = send(request).await;
     match result {
         Ok(ref _result) => {
             //println!("{:?}", &result);
@@ -47,10 +51,14 @@ async fn handle_request(_request: IncomingRequest, response_out: ResponseOutpara
             println!("{:?}", &error);
         }
     }
-    let result: http::Response<Vec<u8>> = result.unwrap();
-    if result.status().as_u16() != 200 {
+    let result: Response = result.unwrap();
+    let status = result.status();
+    if *status != 200 {
         println!("Authentication failed");
-        response_out.set(OutgoingResponse::new(405, &Fields::new(&[])));
+        let response = OutgoingResponse::new(Fields::new());
+        response.set_status_code(405).unwrap();
+
+        response_out.set(response);
         return;
     } else {
         println!("Authentication successful");
@@ -62,7 +70,8 @@ async fn handle_request(_request: IncomingRequest, response_out: ResponseOutpara
         variables::get("vin").expect("could not get variable vin")
     );
     let cookie: String = format!("iPlanetDirectoryPro={}", result.token);
-    let request = RequestBuilder::new(Method::Get, status)
+    let request = Request::builder()
+        .method(Method::Get)
         .header("content-type", "application/json")
         .header("X-TME-APP-VERSION", "4.10.0")
         .header("X-TME-BRAND", "TOYOTA")
@@ -70,8 +79,10 @@ async fn handle_request(_request: IncomingRequest, response_out: ResponseOutpara
         .header("Accept", "application/json, text/plain, */*")
         .header("Cookie", cookie)
         .header("UUID", result.customer_profile.uuid)
+        .uri(status)
         .build();
-    let result: http::Response<Vec<u8>> = send(request).await.unwrap();
+
+    let result: Response = send(request).await.unwrap();
     let remote_control_status: RemoteControlStatus = result.body().into();
     let return_value = CurrentStatus::new(
         remote_control_status
@@ -84,11 +95,11 @@ async fn handle_request(_request: IncomingRequest, response_out: ResponseOutpara
     println!("{}", return_value);
     //println!("{:?}", result);
     //let mut res: http::Response<Option<Bytes>> = result;
+    let fields =
+        Fields::from_list(&[("content-type".to_owned(), b"application/json".to_vec())]).unwrap();
 
-    let response = OutgoingResponse::new(
-        200,
-        &Fields::new(&[("content-type".to_string(), b"application/json".to_vec())]),
-    );
+    let response = OutgoingResponse::new(fields);
+    let _ = response.set_status_code(200);
 
     let mut body = response.take_body();
 

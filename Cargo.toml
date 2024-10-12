@@ -11,4 +11,4 @@ members = [
 serde = { version = "1.0.192", features = ["derive"]}
 serde_json = { version = "1.0.108" }
 bytes = "1.5.0"
-spin-sdk = { git = "https://github.com/fermyon/spin", tag = "v2.0.1" }
+spin-sdk = "3.0.1"

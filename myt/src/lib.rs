@@ -180,9 +180,9 @@ impl conversions::IntoBody for Authenticate {
     }
 }
 
-impl From<&Vec<u8>> for AuthenticateResult {
-    fn from(item: &Vec<u8>) -> Self {
-        let result = String::from_utf8_lossy(&item);
+impl From<&[u8]> for AuthenticateResult {
+    fn from(item: &[u8]) -> Self {
+        let result = String::from_utf8_lossy(item);
         let deserializer = &mut serde_json::Deserializer::from_str(&result);
         let result: Result<AuthenticateResult, _> = serde_path_to_error::deserialize(deserializer);
         match result {
@@ -195,10 +195,9 @@ impl From<&Vec<u8>> for AuthenticateResult {
         //result
     }
 }
-
-impl From<&Vec<u8>> for RemoteControlStatus {
-    fn from(item: &Vec<u8>) -> Self {
-        let result = String::from_utf8_lossy(&item);
+impl From<&[u8]> for RemoteControlStatus {
+    fn from(item: &[u8]) -> Self {
+        let result = String::from_utf8_lossy(item);
         let deserializer = &mut serde_json::Deserializer::from_str(&result);
         let result: Result<RemoteControlStatus, _> = serde_path_to_error::deserialize(deserializer);
         match result {
