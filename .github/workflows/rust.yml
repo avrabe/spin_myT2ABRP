@@ -50,14 +50,12 @@ jobs:
           toolchain: nightly
           override: true
           target: wasm32-wasip1
-      - name: Install udeps
-        run: cargo install cargo-udeps
       - name: Enable cache
         uses: Swatinem/rust-cache@v2
+      - name: Install udeps
+        run: cargo install --git https://github.com/est31/cargo-udeps --locked
       - name: Run udeps
         run: cargo +nightly udeps
-    # Until it is running, keep it as is
-    continue-on-error: true
 
   cargo-deny:
     runs-on: ubuntu-latest
@@ -86,7 +84,7 @@ jobs:
         with:
           toolchain: stable
           override: true
-          target: wasm32-wasi
+          target: wasm32-wasip1
       - name: Enable cache
         uses: Swatinem/rust-cache@v2
       - name: Run cargo-tarpaulin
