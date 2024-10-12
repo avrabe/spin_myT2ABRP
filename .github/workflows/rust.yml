@@ -20,7 +20,7 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-          target: wasm32-wasi
+          target: wasm32-wasip1
       - name: Enable cache
         uses: Swatinem/rust-cache@v2
       - run: cargo install cargo-checkmate
@@ -49,7 +49,7 @@ jobs:
         with:
           toolchain: nightly
           override: true
-          target: wasm32-wasi
+          target: wasm32-wasip1
       - name: Install udeps
         run: cargo install cargo-udeps
       - name: Enable cache
