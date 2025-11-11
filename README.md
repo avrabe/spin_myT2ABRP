@@ -12,17 +12,32 @@ This application provides real-time vehicle battery status (State of Charge) fro
 
 ## Features
 
-### 🚀 Latest Updates (v2.0)
+### 🚀 Latest Updates (v3.0)
 
-- **Spin SDK 5.1.1**: Latest Fermyon Spin framework with HTTP/2 support and improved performance
+**Phase 1 - ABRP Integration:**
+- **ABRP Endpoint**: Dedicated `/abrp` endpoint with properly formatted telemetry for A Better Route Planner
+- **Location Data**: GPS coordinates (lat/lon) from vehicle's last known position
+- **Odometer Data**: Complete mileage tracking for accurate range calculations
+- **Smart Charging Detection**: Automatic detection of charging state from vehicle status
+
+**Phase 2 - Multi-Vehicle Support:**
+- **Vehicle List**: `/vehicles` endpoint to discover all vehicles in your Toyota account
+- **Per-Vehicle Data**: Each endpoint supports the configured VIN
+- **Flexible Integration**: Easy to extend for multiple vehicle support
+
+**Phase 3 - Enhanced Features:**
+- **CORS Support**: Full CORS headers for web application integration
+- **OPTIONS Support**: Proper preflight request handling
+- **Additional Endpoints**: `/location`, `/telemetry`, `/vehicles` for granular data access
+- **6 Total Endpoints**: Comprehensive API surface for all use cases
+
+**Core Features (v2.0):**
+- **Spin SDK 5.1.1**: Latest Fermyon Spin framework with HTTP/2 support
 - **New Toyota API**: Migrated to `ctpa-oneapi` - the modern Toyota Connected Services Europe API
 - **OAuth2 Authentication**: Secure multi-step authentication flow matching the official MyToyota app
 - **Token Caching**: Intelligent token caching with automatic refresh (reduces latency from ~4s to ~200ms)
 - **Better Error Handling**: Comprehensive error messages and graceful degradation
 - **Proper UUID Generation**: Using standard UUID v4 for correlation IDs
-- **Enhanced Telemetry**: Full vehicle data including SoC, charging status, range, and remaining charge time
-- **Health Endpoint**: Monitoring endpoint at `/health` for service health checks
-- **Proper HTTP Headers**: All responses include `Content-Type: application/json` and version information
 - **Comprehensive Testing**: 16 unit tests covering all critical functionality
 - **Zero Warnings**: Clean build with no compiler warnings
 
@@ -112,14 +127,18 @@ cargo test --lib --target x86_64-unknown-linux-gnu test_decode_jwt_uuid
 cargo build --target wasm32-wasip1 --release
 ```
 
-### Query the Service
+### Available Endpoints
 
-**Main endpoint** (vehicle status):
+#### 1. Main Endpoint - Vehicle Status
+**GET /**
+
+Returns comprehensive vehicle telemetry including battery status, charging state, and range.
+
 ```sh
 curl http://127.0.0.1:3000/
 ```
 
-**Expected Response:**
+**Response:**
 ```json
 {
   "soc": 85,
@@ -132,12 +151,95 @@ curl http://127.0.0.1:3000/
 }
 ```
 
-**Health endpoint**:
+#### 2. ABRP Integration Endpoint
+**GET /abrp**
+
+Returns telemetry data formatted for A Better Route Planner integration. Includes location, odometer, and charging status.
+
+```sh
+curl http://127.0.0.1:3000/abrp
+```
+
+**Response:**
+```json
+{
+  "utc": 1704110400,
+  "soc": 85.0,
+  "lat": 52.5200,
+  "lon": 13.4050,
+  "is_charging": true,
+  "odometer": 15234.5,
+  "est_battery_range": 250.5,
+  "version": "0.1.0"
+}
+```
+
+#### 3. Vehicle List
+**GET /vehicles**
+
+Lists all vehicles registered to your Toyota account.
+
+```sh
+curl http://127.0.0.1:3000/vehicles
+```
+
+#### 4. Vehicle Location
+**GET /location**
+
+Returns the last known GPS location of the vehicle.
+
+```sh
+curl http://127.0.0.1:3000/location
+```
+
+**Response:**
+```json
+{
+  "payload": {
+    "vehicleInfo": {
+      "location": {
+        "lat": 52.5200,
+        "lon": 13.4050
+      },
+      "lastUpdateTimestamp": "2025-01-01T12:00:00Z"
+    }
+  }
+}
+```
+
+#### 5. Vehicle Telemetry
+**GET /telemetry**
+
+Returns odometer reading and fuel information.
+
+```sh
+curl http://127.0.0.1:3000/telemetry
+```
+
+**Response:**
+```json
+{
+  "payload": {
+    "vehicleInfo": {
+      "odometer": {
+        "value": 15234.5,
+        "unit": "km"
+      }
+    }
+  }
+}
+```
+
+#### 6. Health Check
+**GET /health**
+
+Returns service health status for monitoring.
+
 ```sh
 curl http://127.0.0.1:3000/health
 ```
 
-**Expected Response:**
+**Response:**
 ```json
 {
   "status": "healthy",
@@ -145,7 +247,33 @@ curl http://127.0.0.1:3000/health
 }
 ```
 
-All responses include proper `Content-Type: application/json` headers.
+### CORS Support
+
+All endpoints support CORS with the following headers:
+- `Access-Control-Allow-Origin: *`
+- `Access-Control-Allow-Methods: GET, OPTIONS`
+- `Access-Control-Allow-Headers: Content-Type`
+
+This enables direct integration from web applications.
+
+## Using with A Better Route Planner (ABRP)
+
+This service provides a dedicated `/abrp` endpoint for seamless integration with ABRP:
+
+1. **Set up your gateway**: Deploy this service and note your public URL
+2. **Configure ABRP**: In ABRP settings, configure generic telemetry API
+3. **Endpoint**: Point to `https://your-gateway.example.com/abrp`
+4. **Polling**: ABRP will automatically poll for updates
+
+The `/abrp` endpoint provides:
+- **State of Charge (SoC)**: Battery percentage
+- **Location**: GPS coordinates for accurate routing
+- **Odometer**: Total mileage for range calculations
+- **Charging Status**: Whether vehicle is charging
+- **Battery Range**: Estimated range with current charge
+- **Timestamp**: UTC timestamp for data freshness
+
+All data is fetched in real-time from Toyota's API and formatted according to ABRP's telemetry specification.
 
 ## Authentication Flow
 
@@ -200,12 +328,24 @@ spin up --log-dir ./logs
 
 ## API Endpoints
 
-### Toyota Connected Services Europe
+### Gateway Endpoints (This Service)
+
+- **Main Status**: `GET /` - Complete vehicle telemetry
+- **ABRP Integration**: `GET /abrp` - ABRP-formatted telemetry with location and odometer
+- **Vehicle List**: `GET /vehicles` - List all registered vehicles
+- **Location**: `GET /location` - GPS coordinates
+- **Telemetry**: `GET /telemetry` - Odometer and fuel data
+- **Health**: `GET /health` - Service health check
+
+### Toyota Connected Services Europe (Upstream)
 
 - **Authentication**: `https://b2c-login.toyota-europe.com/json/realms/root/realms/tme/authenticate`
 - **Authorization**: `https://b2c-login.toyota-europe.com/oauth2/realms/root/realms/tme/authorize`
 - **Token Exchange**: `https://b2c-login.toyota-europe.com/oauth2/realms/root/realms/tme/access_token`
-- **Vehicle Status**: `https://ctpa-oneapi.tceu-ctp-prd.toyotaconnectedeurope.io/v1/global/remote/electric/status`
+- **Electric Status**: `https://ctpa-oneapi.tceu-ctp-prd.toyotaconnectedeurope.io/v1/global/remote/electric/status`
+- **Location**: `https://ctpa-oneapi.tceu-ctp-prd.toyotaconnectedeurope.io/v1/global/remote/location`
+- **Telemetry**: `https://ctpa-oneapi.tceu-ctp-prd.toyotaconnectedeurope.io/v1/global/remote/telemetry`
+- **Vehicles**: `https://ctpa-oneapi.tceu-ctp-prd.toyotaconnectedeurope.io/v1/vehicles`
 
 ## Testing Coverage
 

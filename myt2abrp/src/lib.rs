@@ -2,7 +2,8 @@ use base64::{engine::general_purpose, Engine as _};
 use chrono::Utc;
 use myt::{
     AuthenticateRequest, AuthenticateResponse, CachedToken, ElectricStatusResponse,
-    RefreshTokenRequest, TokenRequest, TokenResponse,
+    LocationResponse, RefreshTokenRequest, TelemetryResponse, TokenRequest, TokenResponse,
+    VehicleListResponse,
 };
 use serde::{Deserialize, Serialize};
 use spin_sdk::http::{IncomingRequest, IntoResponse, Request, Response};
@@ -59,6 +60,25 @@ impl CurrentStatus {
 #[derive(Serialize, Deserialize, Debug)]
 struct HealthStatus {
     pub status: String,
+    pub version: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct AbrpTelemetry {
+    pub utc: i64,
+    pub soc: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lat: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lon: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_charging: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_parked: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub odometer: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub est_battery_range: Option<f64>,
     pub version: String,
 }
 
@@ -277,6 +297,100 @@ async fn perform_full_oauth_flow(
     Ok((token_response, uuid))
 }
 
+async fn fetch_vehicle_location(
+    token: &CachedToken,
+    vin: &str,
+) -> anyhow::Result<LocationResponse> {
+    println!("Fetching vehicle location...");
+    let url = format!("{}/v1/global/remote/location?vin={}", API_BASE, vin);
+
+    let request = Request::get(&url)
+        .header("content-type", "application/json")
+        .header("accept", "application/json")
+        .header("authorization", format!("Bearer {}", token.access_token))
+        .header("datetime", get_timestamp_ms())
+        .header("x-correlationid", Uuid::new_v4().to_string())
+        .build();
+
+    let response = send_request(request).await?;
+
+    if *response.status() != 200 {
+        anyhow::bail!(
+            "Location request failed with status: {}",
+            response.status()
+        );
+    }
+
+    Ok(serde_json::from_slice(response.body())?)
+}
+
+async fn fetch_vehicle_telemetry(
+    token: &CachedToken,
+    vin: &str,
+) -> anyhow::Result<TelemetryResponse> {
+    println!("Fetching vehicle telemetry...");
+    let url = format!("{}/v1/global/remote/telemetry?vin={}", API_BASE, vin);
+
+    let request = Request::get(&url)
+        .header("content-type", "application/json")
+        .header("accept", "application/json")
+        .header("authorization", format!("Bearer {}", token.access_token))
+        .header("datetime", get_timestamp_ms())
+        .header("x-correlationid", Uuid::new_v4().to_string())
+        .build();
+
+    let response = send_request(request).await?;
+
+    if *response.status() != 200 {
+        anyhow::bail!(
+            "Telemetry request failed with status: {}",
+            response.status()
+        );
+    }
+
+    Ok(serde_json::from_slice(response.body())?)
+}
+
+async fn fetch_vehicle_list(token: &CachedToken) -> anyhow::Result<VehicleListResponse> {
+    println!("Fetching vehicle list...");
+    let url = format!("{}/v1/vehicles", API_BASE);
+
+    let request = Request::get(&url)
+        .header("content-type", "application/json")
+        .header("accept", "application/json")
+        .header("authorization", format!("Bearer {}", token.access_token))
+        .header("datetime", get_timestamp_ms())
+        .header("x-correlationid", Uuid::new_v4().to_string())
+        .build();
+
+    let response = send_request(request).await?;
+
+    if *response.status() != 200 {
+        anyhow::bail!(
+            "Vehicle list request failed with status: {}",
+            response.status()
+        );
+    }
+
+    Ok(serde_json::from_slice(response.body())?)
+}
+
+fn parse_iso8601_to_timestamp(iso_string: &str) -> i64 {
+    // Try to parse ISO 8601 timestamp
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(iso_string) {
+        return dt.timestamp();
+    }
+    // If parsing fails, return current time
+    Utc::now().timestamp()
+}
+
+fn add_cors_headers(mut builder: spin_sdk::http::ResponseBuilder) -> spin_sdk::http::ResponseBuilder {
+    builder.header("access-control-allow-origin", "*");
+    builder.header("access-control-allow-methods", "GET, OPTIONS");
+    builder.header("access-control-allow-headers", "Content-Type");
+    builder
+}
+
 async fn get_or_refresh_token(
     username: String,
     password: String,
@@ -325,6 +439,15 @@ async fn get_or_refresh_token(
 async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, anyhow::Error> {
     // Handle health endpoint
     let path = request.uri();
+
+    // Handle OPTIONS requests for CORS preflight
+    if request.method() == spin_sdk::http::Method::Options {
+        return Ok(add_cors_headers(Response::builder())
+            .status(200)
+            .body("")
+            .build());
+    }
+
     if path == "/health" {
         let health = HealthStatus {
             status: "healthy".to_string(),
@@ -333,7 +456,7 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
         let json_response = serde_json::to_string(&health)
             .map_err(|e| anyhow::anyhow!("Failed to serialize health response: {}", e))?;
 
-        return Ok(Response::builder()
+        return Ok(add_cors_headers(Response::builder())
             .status(200)
             .header("content-type", "application/json")
             .body(json_response)
@@ -357,7 +480,7 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
                 "message": e.to_string(),
                 "version": VERSION
             });
-            return Ok(Response::builder()
+            return Ok(add_cors_headers(Response::builder())
                 .status(401)
                 .header("content-type", "application/json")
                 .body(error_json.to_string())
@@ -365,7 +488,170 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
         }
     };
 
-    // Step 5: Get vehicle electric status
+    // Handle /vehicles endpoint - list all vehicles
+    if path == "/vehicles" {
+        match fetch_vehicle_list(&cached_token).await {
+            Ok(vehicle_list) => {
+                let json_response = serde_json::to_string(&vehicle_list)
+                    .map_err(|e| anyhow::anyhow!("Failed to serialize vehicle list: {}", e))?;
+                return Ok(add_cors_headers(Response::builder())
+                    .status(200)
+                    .header("content-type", "application/json")
+                    .body(json_response)
+                    .build());
+            }
+            Err(e) => {
+                let error_json = serde_json::json!({
+                    "error": "Failed to fetch vehicle list",
+                    "message": e.to_string(),
+                    "version": VERSION
+                });
+                return Ok(add_cors_headers(Response::builder())
+                    .status(500)
+                    .header("content-type", "application/json")
+                    .body(error_json.to_string())
+                    .build());
+            }
+        }
+    }
+
+    // Handle /location endpoint
+    if path == "/location" {
+        match fetch_vehicle_location(&cached_token, &vin).await {
+            Ok(location) => {
+                let json_response = serde_json::to_string(&location)
+                    .map_err(|e| anyhow::anyhow!("Failed to serialize location: {}", e))?;
+                return Ok(add_cors_headers(Response::builder())
+                    .status(200)
+                    .header("content-type", "application/json")
+                    .body(json_response)
+                    .build());
+            }
+            Err(e) => {
+                let error_json = serde_json::json!({
+                    "error": "Failed to fetch location",
+                    "message": e.to_string(),
+                    "version": VERSION
+                });
+                return Ok(add_cors_headers(Response::builder())
+                    .status(500)
+                    .header("content-type", "application/json")
+                    .body(error_json.to_string())
+                    .build());
+            }
+        }
+    }
+
+    // Handle /telemetry endpoint
+    if path == "/telemetry" {
+        match fetch_vehicle_telemetry(&cached_token, &vin).await {
+            Ok(telemetry) => {
+                let json_response = serde_json::to_string(&telemetry)
+                    .map_err(|e| anyhow::anyhow!("Failed to serialize telemetry: {}", e))?;
+                return Ok(add_cors_headers(Response::builder())
+                    .status(200)
+                    .header("content-type", "application/json")
+                    .body(json_response)
+                    .build());
+            }
+            Err(e) => {
+                let error_json = serde_json::json!({
+                    "error": "Failed to fetch telemetry",
+                    "message": e.to_string(),
+                    "version": VERSION
+                });
+                return Ok(add_cors_headers(Response::builder())
+                    .status(500)
+                    .header("content-type", "application/json")
+                    .body(error_json.to_string())
+                    .build());
+            }
+        }
+    }
+
+    // Handle /abrp endpoint - ABRP-formatted telemetry
+    if path == "/abrp" {
+        // Fetch electric status
+        let status_url = format!("{}/v1/global/remote/electric/status?vin={}", API_BASE, vin);
+        let request = Request::get(&status_url)
+            .header("content-type", "application/json")
+            .header("accept", "application/json")
+            .header("authorization", format!("Bearer {}", cached_token.access_token))
+            .header("datetime", get_timestamp_ms())
+            .header("x-correlationid", Uuid::new_v4().to_string())
+            .build();
+
+        let electric_status: ElectricStatusResponse = match send_request(request).await {
+            Ok(response) => {
+                if *response.status() != 200 {
+                    let error_json = serde_json::json!({
+                        "error": "Failed to fetch electric status",
+                        "status": *response.status(),
+                        "version": VERSION
+                    });
+                    return Ok(add_cors_headers(Response::builder())
+                        .status(500)
+                        .header("content-type", "application/json")
+                        .body(error_json.to_string())
+                        .build());
+                }
+                serde_json::from_slice(response.body())
+                    .map_err(|e| anyhow::anyhow!("Failed to parse electric status: {}", e))?
+            }
+            Err(e) => {
+                let error_json = serde_json::json!({
+                    "error": "Failed to fetch electric status",
+                    "message": e.to_string(),
+                    "version": VERSION
+                });
+                return Ok(add_cors_headers(Response::builder())
+                    .status(500)
+                    .header("content-type", "application/json")
+                    .body(error_json.to_string())
+                    .build());
+            }
+        };
+
+        // Fetch location (best effort)
+        let location = fetch_vehicle_location(&cached_token, &vin).await.ok();
+
+        // Fetch telemetry (best effort)
+        let telemetry = fetch_vehicle_telemetry(&cached_token, &vin).await.ok();
+
+        let charge_info = &electric_status.payload.vehicle_info.charge_info;
+        let soc = charge_info.charge_remaining_amount.unwrap_or(0) as f64;
+        let utc = parse_iso8601_to_timestamp(&electric_status.payload.vehicle_info.last_update_timestamp);
+
+        // Determine if charging
+        let is_charging = charge_info.charging_status.as_ref().map(|status| {
+            status.to_uppercase().contains("CHARGING") || status.to_uppercase().contains("CONNECTED")
+        });
+
+        let abrp_data = AbrpTelemetry {
+            utc,
+            soc,
+            lat: location.as_ref().map(|l| l.payload.vehicle_info.location.lat),
+            lon: location.as_ref().map(|l| l.payload.vehicle_info.location.lon),
+            is_charging,
+            is_parked: None, // Not available from Toyota API
+            odometer: telemetry.as_ref()
+                .and_then(|t| t.payload.vehicle_info.odometer.as_ref())
+                .and_then(|o| o.value),
+            est_battery_range: charge_info.ev_range.map(|r| r as f64),
+            version: VERSION.to_string(),
+        };
+
+        let json_response = serde_json::to_string(&abrp_data)
+            .map_err(|e| anyhow::anyhow!("Failed to serialize ABRP data: {}", e))?;
+
+        return Ok(add_cors_headers(Response::builder())
+            .status(200)
+            .header("content-type", "application/json")
+            .body(json_response)
+            .build());
+    }
+
+    // Step 5: Get vehicle electric status (default endpoint)
     println!("Getting vehicle electric status...");
     let status_url = format!("{}/v1/global/remote/electric/status?vin={}", API_BASE, vin);
 
@@ -389,7 +675,7 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
                 "message": e.to_string(),
                 "version": VERSION
             });
-            return Ok(Response::builder()
+            return Ok(add_cors_headers(Response::builder())
                 .status(500)
                 .header("content-type", "application/json")
                 .body(error_json.to_string())
@@ -409,7 +695,7 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
             "status": *response.status(),
             "version": VERSION
         });
-        return Ok(Response::builder()
+        return Ok(add_cors_headers(Response::builder())
             .status(500)
             .header("content-type", "application/json")
             .body(error_json.to_string())
@@ -440,7 +726,7 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
 
     println!("Success: {}", json_response);
 
-    Ok(Response::builder()
+    Ok(add_cors_headers(Response::builder())
         .status(200)
         .header("content-type", "application/json")
         .body(json_response)
