@@ -10,9 +10,11 @@ authors = ["Ralf Anton Beier <ralf_beier@me.com>"]
 base = "/"
 
 [variables]
-password = { required = true, secret = true }
-username = { required = true }
-vin = { required = true }
+# Credentials can be provided via Basic Auth or environment variables
+password = { required = false, secret = true }
+username = { required = false }
+# VIN is still required unless using /vehicles endpoint only
+vin = { required = false }
 
 [[trigger.http]]
 route = "/..."
