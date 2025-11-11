@@ -27,6 +27,8 @@ chrono = "0.4"
 # HMAC-SHA256 for secure username hashing
 sha2 = "0.10"
 hmac = "0.12"
+# JWT token generation and validation
+jsonwebtoken = "9.3"
 
 myt = { path = "../myt" }
 serde = { workspace = true }

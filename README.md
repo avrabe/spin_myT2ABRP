@@ -12,15 +12,39 @@ This application provides real-time vehicle battery status (State of Charge) fro
 
 ## Features
 
-### 🚀 Latest Updates (v4.0)
+### 🚀 Latest Updates (v5.0) - COMPLETE SECURITY OVERHAUL
 
-**Multi-User & Apple Watch Support:**
-- **HTTP Basic Authentication**: Multi-user access via standard Basic Auth
-- **Per-User Token Caching**: Isolated token caching with SHA256-hashed usernames
-- **1-Hour Token TTL**: Automatic token expiration after 1 hour of inactivity
-- **Privacy-First Design**: No credential storage, hashed cache keys, automatic cleanup
-- **Backward Compatible**: Still supports single-user environment variable configuration
-- **Apple Watch Ready**: Perfect for iOS/watchOS integration with Keychain credentials
+**⚠️ BREAKING CHANGE: JWT Bearer Token Authentication**
+
+This release implements a **complete architectural redesign** from Basic Authentication to JWT Bearer tokens, following OAuth2 industry best practices for 2024/2025:
+
+- **🔐 JWT Bearer Tokens**: Industry-standard authentication with HS256 signing
+  - **Access Tokens**: Short-lived (15 minutes) for API access
+  - **Refresh Tokens**: Long-lived (7 days) for token renewal
+  - **Token Revocation**: Logout invalidates tokens immediately
+
+- **🛡️ Enhanced Security Architecture**:
+  - **Credentials Sent Once**: Login only - not on every request (Basic Auth sent on EVERY request)
+  - **Session Management**: Track active sessions with timestamps, IP, user agent
+  - **Rate Limiting**: 100 req/user/hour, login lockout after 5 failed attempts (15 min)
+  - **Automatic Token Expiration**: Access tokens expire after 15 minutes
+
+- **🔑 Authentication Endpoints**:
+  - `POST /auth/login` - Authenticate and receive JWT tokens
+  - `POST /auth/refresh` - Renew access token using refresh token
+  - `POST /auth/logout` - Revoke tokens and end session
+
+- **📊 Multi-User Support**:
+  - **Per-User Token Caching**: Each user gets isolated Toyota OAuth token cache
+  - **Privacy-First**: Usernames hashed with HMAC-SHA256 for cache keys
+  - **Session Tracking**: Full audit trail of user sessions
+
+- **🍎 Apple Watch Integration**: Updated flow with token-based auth (see below)
+
+**Previous Updates (v4.0):**
+- Basic Authentication (now removed)
+- Multi-user support via Basic Auth
+- Per-user token caching
 
 **Phase 1-3 Features:**
 
@@ -72,6 +96,118 @@ This application provides real-time vehicle battery status (State of Charge) fro
 - Authentication: OAuth2 with JWT tokens
 - Status: ✅ Active (used by official MyToyota app)
 
+## Authentication
+
+### JWT Bearer Token Flow
+
+This service uses **JWT Bearer tokens** for authentication, following OAuth2 best practices:
+
+#### 1. Login (POST /auth/login)
+
+Authenticate with your Toyota MyT credentials to receive JWT tokens:
+
+```bash
+curl -X POST http://127.0.0.1:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "your.email@example.com",
+    "password": "your_password"
+  }'
+```
+
+**Response:**
+```json
+{
+  "access_token": "eyJhbGc...",
+  "refresh_token": "eyJhbGc...",
+  "token_type": "Bearer",
+  "expires_in": 900
+}
+```
+
+**Security Features:**
+- Toyota credentials validated against official API
+- JWT tokens generated with HS256 signing
+- Session created with tracking info
+- Failed login attempts tracked (5 attempts = 15 min lockout)
+- Rate limited: 100 requests/hour per user
+
+#### 2. Access Protected Endpoints
+
+Use the access token in the `Authorization` header:
+
+```bash
+curl http://127.0.0.1:3000/abrp \
+  -H "Authorization: Bearer eyJhbGc..."
+```
+
+**Access Token Details:**
+- **Lifetime**: 15 minutes
+- **Purpose**: Access all data endpoints
+- **Format**: JWT with HS256 signature
+- **Claims**: sub (username), exp (expiration), jti (token ID)
+
+#### 3. Refresh Token (POST /auth/refresh)
+
+When your access token expires, use the refresh token to get a new one:
+
+```bash
+curl -X POST http://127.0.0.1:3000/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refresh_token": "eyJhbGc..."
+  }'
+```
+
+**Response:**
+```json
+{
+  "access_token": "eyJhbGc...",
+  "token_type": "Bearer",
+  "expires_in": 900
+}
+```
+
+**Refresh Token Details:**
+- **Lifetime**: 7 days
+- **Purpose**: Obtain new access tokens without re-login
+- **Security**: Refresh tokens are also checked against revocation list
+
+#### 4. Logout (POST /auth/logout)
+
+Revoke your tokens when done:
+
+```bash
+curl -X POST http://127.0.0.1:3000/auth/logout \
+  -H "Authorization: Bearer eyJhbGc..."
+```
+
+**Response:**
+```json
+{
+  "message": "Successfully logged out"
+}
+```
+
+**What Happens:**
+- Access token immediately revoked (added to revocation list)
+- Future requests with this token will fail with 401
+- Refresh token for this session also invalidated
+
+### Why JWT Instead of Basic Auth?
+
+**Security Improvements:**
+1. **Credentials Sent Once**: With Basic Auth, credentials were sent on EVERY request. With JWT, credentials are only sent during login.
+2. **Token Revocation**: Can immediately invalidate compromised tokens without changing password
+3. **Session Management**: Track all active sessions, see last access time, IP, user agent
+4. **Rate Limiting**: Prevent brute force attacks with login attempt limits
+5. **Audit Trail**: Know exactly when and from where users authenticated
+
+**Performance:**
+- Same as before: Toyota OAuth tokens are still cached (1 hour TTL)
+- JWT verification is fast (cryptographic signature check)
+- No database lookup required for every request
+
 ## Setup
 
 ### Prerequisites
@@ -95,19 +231,52 @@ This application provides real-time vehicle battery status (State of Charge) fro
 
 ### Configuration
 
-Set your Toyota MyT credentials as environment variables:
+#### Production Deployment (Required)
 
-```sh
-export SPIN_VARIABLE_USERNAME=your.email@example.com
-export SPIN_VARIABLE_PASSWORD=your_password
+**⚠️ CRITICAL: Set JWT Secret**
+
+The JWT secret is used to sign authentication tokens. You **MUST** set a random secret in production:
+
+```bash
+# Generate a random 256-bit secret
+openssl rand -hex 32
+
+# Set as environment variable
+export SPIN_VARIABLE_JWT_SECRET=<your-random-secret-here>
+```
+
+**⚠️ CRITICAL: Set HMAC Key**
+
+The HMAC key is used to hash usernames for privacy. You **MUST** set a random key in production:
+
+```bash
+# Generate a random 256-bit key
+openssl rand -hex 32
+
+# Set as environment variable
+export SPIN_VARIABLE_HMAC_KEY=<your-random-key-here>
+```
+
+#### Optional: Single-Vehicle VIN
+
+If you only have one vehicle, set the VIN (otherwise use `/vehicles` endpoint):
+
+```bash
 export SPIN_VARIABLE_VIN=YOUR_VEHICLE_VIN
 ```
 
-**Security Note**: Use the `secret` flag for sensitive variables in production:
+**Security Configuration in spin.toml:**
 ```toml
 [variables]
-password = { required = true, secret = true }
+jwt_secret = { required = false, secret = true }
+hmac_key = { required = false, secret = true }
+vin = { required = false }
 ```
+
+**Default Values (INSECURE - for development only):**
+- If `jwt_secret` not set: Uses hardcoded default (defined in code)
+- If `hmac_key` not set: Uses hardcoded default (defined in code)
+- **WARNING**: Never use default secrets in production!
 
 ## Development
 
@@ -289,67 +458,199 @@ All data is fetched in real-time from Toyota's API and formatted according to AB
 
 ### Overview
 
-This service supports **multi-user access** via HTTP Basic Authentication, making it ideal for Apple Watch applications and other mobile clients. Each user's Toyota credentials are authenticated separately, and tokens are cached individually with automatic expiration.
+This service supports **multi-user access** via **JWT Bearer tokens**, making it ideal for Apple Watch applications and other mobile clients. Each user authenticates once to receive tokens, which are then used for all subsequent requests.
 
 ### Key Features
 
-- **Basic Authentication**: Standard HTTP Basic Auth for easy integration with Apple Watch and mobile apps
-- **Per-User Token Caching**: Each user gets their own cached token with 1-hour TTL
+- **JWT Bearer Tokens**: Industry-standard OAuth2-style authentication
+- **Token Storage**: Store JWT tokens in iOS Keychain (more secure than storing passwords)
+- **Per-User Token Caching**: Each user gets their own cached Toyota OAuth token (1-hour TTL)
 - **Privacy-First Design**:
-  - Usernames are hashed with SHA256 for cache keys
-  - No credentials are stored permanently
-  - Tokens automatically expire after 1 hour of inactivity
-- **Backward Compatible**: Still supports environment variable configuration for single-user deployments
+  - Usernames are hashed with HMAC-SHA256 for cache keys
+  - No credentials are stored by the gateway
+  - Tokens automatically expire (access: 15 min, refresh: 7 days)
+- **Session Management**: Track all active sessions with timestamps and metadata
 
 ### Apple Watch Integration
 
 To integrate with an Apple Watch app:
 
-1. **Store Credentials**: Use the iOS Keychain to securely store the user's Toyota MyT credentials
-2. **Make Authenticated Requests**: Include credentials in the HTTP Authorization header
-3. **Access Vehicle Data**: Call any endpoint with Basic Auth
+1. **Login Flow**:
+   - Prompt user for Toyota MyT credentials (one-time)
+   - Send credentials to `/auth/login`
+   - Receive access token and refresh token
+   - Store tokens in iOS Keychain
+
+2. **Access Vehicle Data**:
+   - Include access token in Authorization header
+   - When access token expires, use refresh token to get new one
+
+3. **Token Refresh**:
+   - Access tokens expire after 15 minutes
+   - Refresh tokens valid for 7 days
+   - Automatically refresh when needed
 
 #### Example Swift Code
 
 ```swift
 import Foundation
 
-func fetchVehicleStatus(username: String, password: String) async throws -> VehicleStatus {
-    let url = URL(string: "https://your-gateway.example.com/abrp")!
-    var request = URLRequest(url: url)
+// MARK: - Data Models
 
-    // Add Basic Auth header
-    let credentials = "\(username):\(password)"
-    let credentialsData = credentials.data(using: .utf8)!
-    let base64Credentials = credentialsData.base64EncodedString()
-    request.setValue("Basic \(base64Credentials)", forHTTPHeaderField: "Authorization")
+struct LoginRequest: Codable {
+    let username: String
+    let password: String
+}
 
-    let (data, response) = try await URLSession.shared.data(for: request)
+struct LoginResponse: Codable {
+    let access_token: String
+    let refresh_token: String
+    let token_type: String
+    let expires_in: Int
+}
 
-    guard let httpResponse = response as? HTTPURLResponse,
-          httpResponse.statusCode == 200 else {
-        throw VehicleError.authenticationFailed
+struct RefreshRequest: Codable {
+    let refresh_token: String
+}
+
+struct RefreshResponse: Codable {
+    let access_token: String
+    let token_type: String
+    let expires_in: Int
+}
+
+// MARK: - Authentication Service
+
+class ToyotaGatewayAuth {
+    static let shared = ToyotaGatewayAuth()
+    private let baseURL = "https://your-gateway.example.com"
+
+    // Login and store tokens
+    func login(username: String, password: String) async throws -> LoginResponse {
+        let url = URL(string: "\(baseURL)/auth/login")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let loginReq = LoginRequest(username: username, password: password)
+        request.httpBody = try JSONEncoder().encode(loginReq)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw AuthError.loginFailed
+        }
+
+        let loginResponse = try JSONDecoder().decode(LoginResponse.self, from: data)
+
+        // Store tokens in Keychain
+        try KeychainManager.save(token: loginResponse.access_token, key: "access_token")
+        try KeychainManager.save(token: loginResponse.refresh_token, key: "refresh_token")
+
+        return loginResponse
     }
 
-    return try JSONDecoder().decode(VehicleStatus.self, from: data)
+    // Refresh access token
+    func refreshToken() async throws -> String {
+        guard let refreshToken = try KeychainManager.load(key: "refresh_token") else {
+            throw AuthError.noRefreshToken
+        }
+
+        let url = URL(string: "\(baseURL)/auth/refresh")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let refreshReq = RefreshRequest(refresh_token: refreshToken)
+        request.httpBody = try JSONEncoder().encode(refreshReq)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw AuthError.refreshFailed
+        }
+
+        let refreshResponse = try JSONDecoder().decode(RefreshResponse.self, from: data)
+
+        // Store new access token
+        try KeychainManager.save(token: refreshResponse.access_token, key: "access_token")
+
+        return refreshResponse.access_token
+    }
+
+    // Fetch vehicle data with auto-refresh
+    func fetchVehicleStatus() async throws -> VehicleStatus {
+        var accessToken = try KeychainManager.load(key: "access_token")
+
+        // Try with current token
+        do {
+            return try await makeRequest(token: accessToken)
+        } catch AuthError.unauthorized {
+            // Token expired, refresh and retry
+            accessToken = try await refreshToken()
+            return try await makeRequest(token: accessToken)
+        }
+    }
+
+    private func makeRequest(token: String?) async throws -> VehicleStatus {
+        guard let token = token else {
+            throw AuthError.noAccessToken
+        }
+
+        let url = URL(string: "\(baseURL)/abrp")!
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AuthError.invalidResponse
+        }
+
+        if httpResponse.statusCode == 401 {
+            throw AuthError.unauthorized
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            throw AuthError.requestFailed
+        }
+
+        return try JSONDecoder().decode(VehicleStatus.self, from: data)
+    }
+
+    // Logout
+    func logout() async throws {
+        guard let accessToken = try KeychainManager.load(key: "access_token") else {
+            return
+        }
+
+        let url = URL(string: "\(baseURL)/auth/logout")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+        _ = try await URLSession.shared.data(for: request)
+
+        // Clear keychain
+        try KeychainManager.delete(key: "access_token")
+        try KeychainManager.delete(key: "refresh_token")
+    }
+}
+
+enum AuthError: Error {
+    case loginFailed
+    case refreshFailed
+    case unauthorized
+    case noAccessToken
+    case noRefreshToken
+    case invalidResponse
+    case requestFailed
 }
 ```
 
-### Authentication Methods
-
-The gateway supports two authentication methods (checked in order):
-
-1. **HTTP Basic Authentication** (Recommended for multi-user)
-   ```bash
-   curl -u "your.email@example.com:your_password" https://your-gateway.example.com/abrp
-   ```
-
-2. **Environment Variables** (For single-user deployments)
-   ```bash
-   export SPIN_VARIABLE_USERNAME=your.email@example.com
-   export SPIN_VARIABLE_PASSWORD=your_password
-   export SPIN_VARIABLE_VIN=YOUR_VEHICLE_VIN
-   ```
+### Authentication Flow (Updated for JWT)
 
 ### Security & Privacy Features
 
