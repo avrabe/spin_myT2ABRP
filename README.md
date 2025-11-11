@@ -387,10 +387,58 @@ The per-user token caching provides excellent performance for multi-user scenari
 When deploying for multi-user access:
 
 1. **Use HTTPS**: Always deploy behind HTTPS to protect credentials in transit
-2. **Configure CORS**: Restrict `access-control-allow-origin` to your app's domain (currently set to `*`)
-3. **Monitor Cache Size**: Each user adds one cache entry; consider cleanup strategies for high-traffic deployments
-4. **Set Environment Variables Optional**: Make credentials optional in `spin.toml` (already configured)
-5. **Rate Limiting**: Consider adding rate limiting to prevent abuse
+2. **⚠️ CRITICAL: Configure CORS**: Restrict `access-control-allow-origin` to your app's domain (currently set to `*` - **MUST CHANGE**)
+3. **⚠️ CRITICAL: Set HMAC Key**: Configure `SPIN_VARIABLE_HMAC_KEY` with a random secret (see Security Configuration below)
+4. **Monitor Cache Size**: Each user adds one cache entry; consider cleanup strategies for high-traffic deployments
+5. **Set Environment Variables Optional**: Make credentials optional in `spin.toml` (already configured)
+6. **Rate Limiting**: Consider adding rate limiting to prevent abuse
+
+### Security Configuration
+
+#### ⚠️ CRITICAL: HMAC Key
+
+The service uses HMAC-SHA256 to hash usernames before using them as cache keys. This prevents rainbow table attacks if the key-value store is compromised.
+
+**You MUST set a random HMAC key in production:**
+
+```bash
+# Generate a random key (32+ bytes recommended)
+openssl rand -hex 32
+
+# Set as environment variable
+export SPIN_VARIABLE_HMAC_KEY=<your-random-key-here>
+```
+
+**Default value**: If not set, uses a hardcoded default key (defined in code). This is **INSECURE** for production use.
+
+**Add to spin.toml:**
+```toml
+[variables]
+hmac_key = { required = false, secret = true }
+```
+
+#### ⚠️ CRITICAL: CORS Configuration
+
+Currently set to `access-control-allow-origin: *` which allows **ANY** website to make requests.
+
+**For production**, edit `myt2abrp/src/lib.rs` and change:
+```rust
+builder.header("access-control-allow-origin", "*");
+// To:
+builder.header("access-control-allow-origin", "https://your-app-domain.com");
+```
+
+Or make it configurable via environment variable.
+
+#### Input Validation
+
+The service validates:
+- Username must be a valid email address
+- Username maximum length: 256 characters
+- Password maximum length: 256 characters
+- Base64 auth header maximum size: 1024 bytes
+
+These limits prevent DoS attacks via extremely large inputs.
 
 ### Troubleshooting Multi-User Issues
 
