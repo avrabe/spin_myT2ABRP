@@ -1,13 +1,64 @@
-use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use spin_sdk::http::conversions;
+use spin_sdk::http::conversions::IntoBody;
 use std::{convert::From, option::Option};
-#[derive(Serialize, Deserialize, Debug)]
 
-pub struct AuthenticateResult {
-    pub token: String,
-    #[serde(rename = "customerProfile")]
-    pub customer_profile: CustomerProfile,
+// New OAuth2 Authentication Structures
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AuthenticateRequest {
+    pub callbacks: Vec<Callback>,
+    #[serde(rename = "authId")]
+    pub auth_id: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Callback {
+    pub r#type: String,
+    pub output: Option<Vec<CallbackOutput>>,
+    pub input: Option<Vec<CallbackInput>>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CallbackOutput {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CallbackInput {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AuthenticateResponse {
+    #[serde(rename = "tokenId")]
+    pub token_id: Option<String>,
+    pub callbacks: Option<Vec<Callback>>,
+    #[serde(rename = "authId")]
+    pub auth_id: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TokenRequest {
+    pub client_id: String,
+    pub code: String,
+    pub redirect_uri: String,
+    pub grant_type: String,
+    pub code_verifier: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TokenResponse {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub id_token: String,
+    pub expires_in: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct JwtPayload {
+    pub uuid: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -88,123 +139,123 @@ pub struct Authenticate {
     pub password: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+// New API Electric Status Structures
 
-pub struct VehicleInfo {
-    #[serde(rename = "AcquisitionDatetime")]
-    pub acquisition_datetime: String,
-    #[serde(rename = "RemoteHvacInfo")]
-    remote_hvac_info: RemoteHvacInfo,
-    #[serde(rename = "ChargeInfo")]
-    pub charge_info: ChargeInfo,
-}
 #[derive(Serialize, Deserialize, Debug)]
-
-pub struct RemoteHvacInfo {
-    #[serde(rename = "Temperaturelevel")]
-    temperature_level: i32,
-    #[serde(rename = "SettingTemperature")]
-    setting_temperature: f32,
-    #[serde(rename = "BlowerStatus")]
-    blower_status: i32,
-    #[serde(rename = "FrontDefoggerStatus")]
-    front_defogger_status: i32,
-    #[serde(rename = "RearDefoggerStatus")]
-    rear_defogger_status: i32,
-    #[serde(rename = "RemoteHvacMode")]
-    remote_hvac_mode: i32,
-    #[serde(rename = "RemoteHvacProhibitionSignal")]
-    remote_hvac_prohibition_signal: i32,
-    #[serde(rename = "InsideTemperature")]
-    inside_temperature: i32,
+pub struct ElectricStatusResponse {
+    pub payload: ElectricStatusPayload,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-
-pub struct ChargeInfo {
-    #[serde(rename = "EvDistanceInKm")]
-    ev_distance_in_km: f32,
-    #[serde(rename = "GasolineTravelableDistanceUnit")]
-    gasoline_travelable_distance_unit: i32,
-    #[serde(rename = "GasolineTravelableDistance")]
-    gasoline_travelable_distance: i32,
-    #[serde(rename = "ChargeWeek")]
-    charge_week: i32,
-    #[serde(rename = "ChargeStartTime")]
-    charge_start_time: String,
-    #[serde(rename = "ChargeEndTime")]
-    charge_end_time: String,
-    #[serde(rename = "ConnectorStatus")]
-    connector_status: i32,
-    #[serde(rename = "BatteryPowerSupplyPossibleTime")]
-    battery_power_supply_possible_time: i32,
-    #[serde(rename = "ChargingStatus")]
-    charging_status: String,
-    #[serde(rename = "EvDistanceWithAirCoInKm")]
-    ev_distance_with_air_co_in_km: f32,
-    #[serde(rename = "PlugStatus")]
-    plug_status: i32,
-    #[serde(rename = "PlugInHistory")]
-    plug_in_history: i32,
-    #[serde(rename = "RemainingChargeTime")]
-    remaining_charge_time: i32,
-    #[serde(rename = "EvTravelableDistance")]
-    ev_travelable_distance: f32,
-    #[serde(rename = "EvTravelableDistanceSubtractionRate")]
-    ev_travelable_distance_subtraction_rate: i32,
-    #[serde(rename = "ChargeRemainingAmount")]
-    pub charge_remaining_amount: i32,
-    #[serde(rename = "SettingChangeAcceptanceStatus")]
-    setting_change_acceptance_status: i32,
-    #[serde(rename = "ChargeType")]
-    charge_type: i32,
+pub struct ElectricStatusPayload {
+    #[serde(rename = "vehicleInfo")]
+    pub vehicle_info: ElectricVehicleInfo,
 }
+
 #[derive(Serialize, Deserialize, Debug)]
-pub struct RemoteControlStatus {
-    #[serde(rename = "VehicleInfo")]
-    pub vehicle_info: VehicleInfo,
-    #[serde(rename = "ReturnCode")]
-    return_code: String,
+pub struct ElectricVehicleInfo {
+    #[serde(rename = "chargeInfo")]
+    pub charge_info: NewChargeInfo,
+    #[serde(rename = "lastUpdateTimestamp")]
+    pub last_update_timestamp: String,
 }
 
-impl Authenticate {
-    pub fn new(username: String, password: String) -> Authenticate {
-        Authenticate { username, password }
-    }
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NewChargeInfo {
+    #[serde(rename = "chargeRemainingAmount")]
+    pub charge_remaining_amount: Option<i32>,
+    #[serde(rename = "chargingStatus")]
+    pub charging_status: Option<String>,
+    #[serde(rename = "evRange")]
+    pub ev_range: Option<f32>,
+    #[serde(rename = "evRangeWithAc")]
+    pub ev_range_with_ac: Option<f32>,
+    #[serde(rename = "remainingChargeTime")]
+    pub remaining_charge_time: Option<i32>,
 }
 
-impl conversions::IntoBody for Authenticate {
+// Trait implementations for new structures
+
+impl IntoBody for AuthenticateRequest {
     fn into_body(self) -> Vec<u8> {
-        let string_address = serde_json::to_string(&self).unwrap();
-        Bytes::from(string_address).to_vec()
+        serde_json::to_vec(&self).unwrap()
     }
 }
 
-impl From<&[u8]> for AuthenticateResult {
+impl IntoBody for TokenRequest {
+    fn into_body(self) -> Vec<u8> {
+        serde_json::to_vec(&self).unwrap()
+    }
+}
+
+impl AuthenticateRequest {
+    pub fn new() -> Self {
+        AuthenticateRequest {
+            callbacks: vec![],
+            auth_id: None,
+        }
+    }
+
+    pub fn with_credentials(username: String, password: String, auth_id: Option<String>) -> Self {
+        AuthenticateRequest {
+            callbacks: vec![
+                Callback {
+                    r#type: "NameCallback".to_string(),
+                    output: None,
+                    input: Some(vec![CallbackInput {
+                        name: "IDToken1".to_string(),
+                        value: username,
+                    }]),
+                },
+                Callback {
+                    r#type: "PasswordCallback".to_string(),
+                    output: None,
+                    input: Some(vec![CallbackInput {
+                        name: "IDToken2".to_string(),
+                        value: password,
+                    }]),
+                },
+            ],
+            auth_id,
+        }
+    }
+}
+
+impl From<&[u8]> for AuthenticateResponse {
+    fn from(item: &[u8]) -> Self {
+        serde_json::from_slice(item).unwrap()
+    }
+}
+
+impl From<&[u8]> for TokenResponse {
+    fn from(item: &[u8]) -> Self {
+        serde_json::from_slice(item).unwrap()
+    }
+}
+
+impl From<&[u8]> for ElectricStatusResponse {
     fn from(item: &[u8]) -> Self {
         let result = String::from_utf8_lossy(item);
         let deserializer = &mut serde_json::Deserializer::from_str(&result);
-        let result: Result<AuthenticateResult, _> = serde_path_to_error::deserialize(deserializer);
+        let result: Result<ElectricStatusResponse, _> =
+            serde_path_to_error::deserialize(deserializer);
         match result {
-            Ok(authenticate_result) => authenticate_result,
+            Ok(status) => status,
             Err(err) => {
-                panic!("{}", err);
+                panic!("Failed to parse electric status: {}", err);
             }
         }
-        //let result: AuthenticateResult = serde_json::from_str(&result).unwrap();
-        //result
     }
 }
-impl From<&[u8]> for RemoteControlStatus {
-    fn from(item: &[u8]) -> Self {
-        let result = String::from_utf8_lossy(item);
-        let deserializer = &mut serde_json::Deserializer::from_str(&result);
-        let result: Result<RemoteControlStatus, _> = serde_path_to_error::deserialize(deserializer);
-        match result {
-            Ok(remote_control_status) => remote_control_status,
-            Err(err) => {
-                panic!("{}", err);
-            }
+
+impl TokenRequest {
+    pub fn new(code: String) -> Self {
+        TokenRequest {
+            client_id: "oneapp".to_string(),
+            code,
+            redirect_uri: "com.toyota.oneapp:/oauth2Callback".to_string(),
+            grant_type: "authorization_code".to_string(),
+            code_verifier: "plain".to_string(),
         }
     }
 }
