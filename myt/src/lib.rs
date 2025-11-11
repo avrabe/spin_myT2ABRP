@@ -209,6 +209,12 @@ impl IntoBody for RefreshTokenRequest {
     }
 }
 
+impl Default for AuthenticateRequest {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AuthenticateRequest {
     pub fn new() -> Self {
         AuthenticateRequest {

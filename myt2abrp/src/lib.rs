@@ -18,17 +18,48 @@ const TOKEN_URL: &str =
 const API_BASE: &str = "https://ctpa-oneapi.tceu-ctp-prd.toyotaconnectedeurope.io";
 
 const TOKEN_CACHE_KEY: &str = "toyota_auth_token";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Serialize, Deserialize, Debug)]
 struct CurrentStatus {
     pub soc: i32,
     pub access_date: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub charging_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ev_range: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ev_range_with_ac: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remaining_charge_time: Option<i32>,
+    pub version: String,
 }
 
 impl CurrentStatus {
-    pub fn new(soc: i32, access_date: String) -> CurrentStatus {
-        CurrentStatus { soc, access_date }
+    pub fn new(
+        soc: i32,
+        access_date: String,
+        charging_status: Option<String>,
+        ev_range: Option<f32>,
+        ev_range_with_ac: Option<f32>,
+        remaining_charge_time: Option<i32>,
+    ) -> CurrentStatus {
+        CurrentStatus {
+            soc,
+            access_date,
+            charging_status,
+            ev_range,
+            ev_range_with_ac,
+            remaining_charge_time,
+            version: VERSION.to_string(),
+        }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct HealthStatus {
+    pub status: String,
+    pub version: String,
 }
 
 fn get_timestamp_ms() -> String {
@@ -291,7 +322,24 @@ async fn get_or_refresh_token(
 
 /// Send an HTTP request and return the response.
 #[http_component]
-async fn handle_request(_request: IncomingRequest) -> Result<impl IntoResponse, anyhow::Error> {
+async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, anyhow::Error> {
+    // Handle health endpoint
+    let path = request.uri();
+    if path == "/health" {
+        let health = HealthStatus {
+            status: "healthy".to_string(),
+            version: VERSION.to_string(),
+        };
+        let json_response = serde_json::to_string(&health)
+            .map_err(|e| anyhow::anyhow!("Failed to serialize health response: {}", e))?;
+
+        return Ok(Response::builder()
+            .status(200)
+            .header("content-type", "application/json")
+            .body(json_response)
+            .build());
+    }
+
     let username = variables::get("username")
         .map_err(|e| anyhow::anyhow!("Failed to get username variable: {}", e))?;
     let password = variables::get("password")
@@ -304,10 +352,16 @@ async fn handle_request(_request: IncomingRequest) -> Result<impl IntoResponse, 
         Ok(token) => token,
         Err(e) => {
             println!("Authentication failed: {}", e);
-            return Ok(Response::new(
-                401,
-                format!("Authentication failed: {}", e),
-            ));
+            let error_json = serde_json::json!({
+                "error": "Authentication failed",
+                "message": e.to_string(),
+                "version": VERSION
+            });
+            return Ok(Response::builder()
+                .status(401)
+                .header("content-type", "application/json")
+                .body(error_json.to_string())
+                .build());
         }
     };
 
@@ -330,10 +384,16 @@ async fn handle_request(_request: IncomingRequest) -> Result<impl IntoResponse, 
         Ok(r) => r,
         Err(e) => {
             println!("Failed to get vehicle status: {}", e);
-            return Ok(Response::new(
-                500,
-                format!("Failed to get vehicle status: {}", e),
-            ));
+            let error_json = serde_json::json!({
+                "error": "Failed to get vehicle status",
+                "message": e.to_string(),
+                "version": VERSION
+            });
+            return Ok(Response::builder()
+                .status(500)
+                .header("content-type", "application/json")
+                .body(error_json.to_string())
+                .build());
         }
     };
 
@@ -344,37 +404,47 @@ async fn handle_request(_request: IncomingRequest) -> Result<impl IntoResponse, 
             response.status(),
             error_body
         );
-        return Ok(Response::new(
-            500,
-            format!(
-                "Failed to get vehicle status. Status: {}",
-                response.status()
-            ),
-        ));
+        let error_json = serde_json::json!({
+            "error": "Failed to get vehicle status",
+            "status": *response.status(),
+            "version": VERSION
+        });
+        return Ok(Response::builder()
+            .status(500)
+            .header("content-type", "application/json")
+            .body(error_json.to_string())
+            .build());
     }
 
     let electric_status: ElectricStatusResponse = serde_json::from_slice(response.body())
         .map_err(|e| anyhow::anyhow!("Failed to parse vehicle status response: {}", e))?;
 
-    let soc = electric_status
-        .payload
-        .vehicle_info
-        .charge_info
-        .charge_remaining_amount
-        .unwrap_or(0);
+    let charge_info = &electric_status.payload.vehicle_info.charge_info;
 
+    let soc = charge_info.charge_remaining_amount.unwrap_or(0);
     let access_date = electric_status
         .payload
         .vehicle_info
         .last_update_timestamp;
 
-    let return_value = CurrentStatus::new(soc, access_date);
+    let return_value = CurrentStatus::new(
+        soc,
+        access_date,
+        charge_info.charging_status.clone(),
+        charge_info.ev_range,
+        charge_info.ev_range_with_ac,
+        charge_info.remaining_charge_time,
+    );
     let json_response = serde_json::to_string(&return_value)
         .map_err(|e| anyhow::anyhow!("Failed to serialize response: {}", e))?;
 
     println!("Success: {}", json_response);
 
-    Ok(Response::new(200, json_response))
+    Ok(Response::builder()
+        .status(200)
+        .header("content-type", "application/json")
+        .body(json_response)
+        .build())
 }
 
 #[cfg(test)]
@@ -437,9 +507,40 @@ mod tests {
 
     #[test]
     fn test_current_status_creation() {
-        let status = CurrentStatus::new(85, "2025-01-01T12:00:00Z".to_string());
+        let status = CurrentStatus::new(
+            85,
+            "2025-01-01T12:00:00Z".to_string(),
+            Some("CHARGING".to_string()),
+            Some(250.5),
+            Some(230.0),
+            Some(120),
+        );
         assert_eq!(status.soc, 85);
         assert_eq!(status.access_date, "2025-01-01T12:00:00Z");
+        assert_eq!(status.charging_status, Some("CHARGING".to_string()));
+        assert_eq!(status.ev_range, Some(250.5));
+        assert_eq!(status.ev_range_with_ac, Some(230.0));
+        assert_eq!(status.remaining_charge_time, Some(120));
+        assert_eq!(status.version, VERSION);
+    }
+
+    #[test]
+    fn test_current_status_with_optional_fields() {
+        let status = CurrentStatus::new(
+            75,
+            "2025-01-01T13:00:00Z".to_string(),
+            None,
+            None,
+            None,
+            None,
+        );
+        assert_eq!(status.soc, 75);
+        assert_eq!(status.access_date, "2025-01-01T13:00:00Z");
+        assert_eq!(status.charging_status, None);
+        assert_eq!(status.ev_range, None);
+        assert_eq!(status.ev_range_with_ac, None);
+        assert_eq!(status.remaining_charge_time, None);
+        assert_eq!(status.version, VERSION);
     }
 
     #[test]

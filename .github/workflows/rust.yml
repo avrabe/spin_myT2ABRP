@@ -74,6 +74,21 @@ jobs:
         with:
           command: check ${{ matrix.checks }}
 
+  test:
+    name: Run tests on native target
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Enable cache
+        uses: Swatinem/rust-cache@v2
+      - name: Run tests
+        run: cargo test --lib --target x86_64-unknown-linux-gnu
+
   codecov-check:
     name: codecov-check
     runs-on: ubuntu-latest
@@ -84,25 +99,22 @@ jobs:
         with:
           toolchain: stable
           override: true
-          target: wasm32-wasip1
       - name: Enable cache
         uses: Swatinem/rust-cache@v2
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin
       - name: Run cargo-tarpaulin
-        uses: actions-rs/tarpaulin@v0.1
-        with:
-          version: "0.15.0"
-          args: "-- --test-threads 1"
+        run: cargo tarpaulin --lib --target x86_64-unknown-linux-gnu --out xml --output-dir . --timeout 120
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v5.5.1
         with:
           token: ${{secrets.CODECOV_TOKEN}}
+          files: ./cobertura.xml
+          fail_ci_if_error: true
 
       - name: Archive code coverage results
         uses: actions/upload-artifact@v5
         with:
           name: code-coverage-report
           path: cobertura.xml
-
-    # Need to check how to test wasn with tarpaulin.
-    continue-on-error: true
