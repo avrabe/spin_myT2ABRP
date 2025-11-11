@@ -1,27 +1,33 @@
-spin_version = "1"
-authors = ["Ralf Anton Beier <ralf_beier@me.com>"]
-description = "Toyota MyT to A Better Routeplanner" 
+spin_manifest_version = 2
+
+[application]
 name = "myT2ABRP"
-trigger = { type = "http", base = "/" }
 version = "0.1.0"
+description = "Toyota MyT to A Better Routeplanner"
+authors = ["Ralf Anton Beier <ralf_beier@me.com>"]
+
+[application.trigger.http]
+base = "/"
 
 [variables]
-password = { required = true }
+password = { required = true, secret = true }
 username = { required = true }
 vin = { required = true }
 
-
-[[component]]
-id = "myt2abrp"
-source = "target/wasm32-wasip1/release/myt2abrp.wasm"
-allowed_http_hosts = [ "ssoms.toyota-europe.com", "myt-agg.toyota-europe.com" ]
-[component.trigger]
+[[trigger.http]]
 route = "/..."
-[component.build]
+component = "myt2abrp"
+
+[component.myt2abrp]
+source = "target/wasm32-wasip1/release/myt2abrp.wasm"
+allowed_outbound_hosts = [
+    "https://b2c-login.toyota-europe.com",
+    "https://ctpa-oneapi.tceu-ctp-prd.toyotaconnectedeurope.io"
+]
+[component.myt2abrp.build]
 command = "cargo build --target wasm32-wasip1 --release"
-# Example watch configuration for a Rust application
 watch = ["myt2abrp/src/**/*.rs", "myt2abrp/Cargo.toml", "Cargo.toml", "myt/src/**/*.rs", "myt/Cargo.toml"]
-[component.config]
+[component.myt2abrp.variables]
 password = "{{ password }}"
 username = "{{ username }}"
 vin = "{{ vin }}"
