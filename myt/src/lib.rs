@@ -400,7 +400,11 @@ impl RefreshTokenRequest {
 }
 
 impl CachedToken {
-    pub fn from_token_response(token_response: TokenResponse, uuid: String, current_time: i64) -> Self {
+    pub fn from_token_response(
+        token_response: TokenResponse,
+        uuid: String,
+        current_time: i64,
+    ) -> Self {
         CachedToken {
             access_token: token_response.access_token,
             refresh_token: token_response.refresh_token,
@@ -498,11 +502,8 @@ mod tests {
         };
 
         let current_time = 1000;
-        let cached = CachedToken::from_token_response(
-            token_response,
-            "uuid".to_string(),
-            current_time,
-        );
+        let cached =
+            CachedToken::from_token_response(token_response, "uuid".to_string(), current_time);
 
         // Not expired right away
         assert!(!cached.is_expired(current_time));
@@ -535,9 +536,22 @@ mod tests {
         assert!(result.is_ok());
 
         let response = result.unwrap();
-        assert_eq!(response.payload.vehicle_info.charge_info.charge_remaining_amount, Some(85));
-        assert_eq!(response.payload.vehicle_info.charge_info.charging_status, Some("CHARGING".to_string()));
-        assert_eq!(response.payload.vehicle_info.last_update_timestamp, "2025-01-01T12:00:00Z");
+        assert_eq!(
+            response
+                .payload
+                .vehicle_info
+                .charge_info
+                .charge_remaining_amount,
+            Some(85)
+        );
+        assert_eq!(
+            response.payload.vehicle_info.charge_info.charging_status,
+            Some("CHARGING".to_string())
+        );
+        assert_eq!(
+            response.payload.vehicle_info.last_update_timestamp,
+            "2025-01-01T12:00:00Z"
+        );
     }
 
     #[test]
@@ -555,8 +569,18 @@ mod tests {
         assert!(result.is_ok());
 
         let response = result.unwrap();
-        assert_eq!(response.payload.vehicle_info.charge_info.charge_remaining_amount, None);
-        assert_eq!(response.payload.vehicle_info.charge_info.charging_status, None);
+        assert_eq!(
+            response
+                .payload
+                .vehicle_info
+                .charge_info
+                .charge_remaining_amount,
+            None
+        );
+        assert_eq!(
+            response.payload.vehicle_info.charge_info.charging_status,
+            None
+        );
     }
 
     #[test]
