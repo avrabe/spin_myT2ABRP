@@ -6,7 +6,8 @@ use myt::{
     VehicleListResponse,
 };
 use serde::{Deserialize, Serialize};
-use sha2::{Sha256, Digest};
+use sha2::Sha256;
+use hmac::{Hmac, Mac};
 use spin_sdk::http::{IncomingRequest, IntoResponse, Request, Response};
 use spin_sdk::key_value::Store;
 use spin_sdk::{http_component, variables};
@@ -22,6 +23,15 @@ const API_BASE: &str = "https://ctpa-oneapi.tceu-ctp-prd.toyotaconnectedeurope.i
 const TOKEN_CACHE_KEY_PREFIX: &str = "toyota_auth_token_";
 const TOKEN_TTL_SECONDS: i64 = 3600; // 1 hour TTL for per-user tokens
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+// SECURITY: HMAC key for username hashing
+// IMPORTANT: Change this to a random value in production via environment variable
+// This prevents rainbow table attacks on cached username hashes
+const HMAC_KEY_DEFAULT: &[u8] = b"toyota-myt-gateway-hmac-key-change-in-production";
+
+// Input validation limits
+const MAX_USERNAME_LENGTH: usize = 256;
+const MAX_PASSWORD_LENGTH: usize = 256;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct CurrentStatus {
@@ -155,6 +165,31 @@ fn decode_jwt_uuid(id_token: &str) -> anyhow::Result<String> {
         .map(|s| s.to_string())
 }
 
+fn validate_credentials(username: &str, password: &str) -> anyhow::Result<()> {
+    // Validate username length
+    if username.is_empty() {
+        anyhow::bail!("Username cannot be empty");
+    }
+    if username.len() > MAX_USERNAME_LENGTH {
+        anyhow::bail!("Username exceeds maximum length of {} characters", MAX_USERNAME_LENGTH);
+    }
+
+    // Validate password length
+    if password.is_empty() {
+        anyhow::bail!("Password cannot be empty");
+    }
+    if password.len() > MAX_PASSWORD_LENGTH {
+        anyhow::bail!("Password exceeds maximum length of {} characters", MAX_PASSWORD_LENGTH);
+    }
+
+    // Basic format validation for username (should look like an email)
+    if !username.contains('@') || !username.contains('.') {
+        anyhow::bail!("Username must be a valid email address");
+    }
+
+    Ok(())
+}
+
 fn extract_basic_auth(request: &IncomingRequest) -> Option<(String, String)> {
     // Look for Authorization header by iterating over headers
     let headers = request.headers();
@@ -177,9 +212,14 @@ fn extract_basic_auth(request: &IncomingRequest) -> Option<(String, String)> {
     // Extract base64 part
     let base64_part = auth_value.strip_prefix("Basic ")?;
 
-    // Decode base64
+    // Decode base64 with size limit check
+    let base64_bytes = base64_part.trim().as_bytes();
+    if base64_bytes.len() > 1024 {  // Reasonable limit for base64 encoded credentials
+        return None;
+    }
+
     let decoded = general_purpose::STANDARD
-        .decode(base64_part.trim().as_bytes())
+        .decode(base64_bytes)
         .ok()?;
 
     let decoded_str = String::from_utf8(decoded).ok()?;
@@ -194,10 +234,28 @@ fn extract_basic_auth(request: &IncomingRequest) -> Option<(String, String)> {
 }
 
 fn hash_username(username: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(username.as_bytes());
-    let result = hasher.finalize();
-    format!("{:x}", result)
+    hash_username_with_key(username, None)
+}
+
+fn hash_username_with_key(username: &str, key: Option<&[u8]>) -> String {
+    type HmacSha256 = Hmac<Sha256>;
+
+    // Use provided key, or try to get from environment, or use default
+    let hmac_key = match key {
+        Some(k) => k.to_vec(),
+        None => {
+            variables::get("hmac_key")
+                .unwrap_or_else(|_| String::from_utf8_lossy(HMAC_KEY_DEFAULT).to_string())
+                .into_bytes()
+        }
+    };
+
+    let mut mac = HmacSha256::new_from_slice(&hmac_key)
+        .expect("HMAC can take key of any size");
+    mac.update(username.as_bytes());
+    let result = mac.finalize();
+
+    format!("{:x}", result.into_bytes())
 }
 
 fn get_user_token_cache_key(username_hash: &str) -> String {
@@ -213,17 +271,14 @@ async fn send_request(request: Request) -> anyhow::Result<Response> {
 async fn get_per_user_cached_token(
     store: &Store,
     username_hash: &str,
-    current_time: i64,
 ) -> anyhow::Result<Option<PerUserCachedToken>> {
     let cache_key = get_user_token_cache_key(username_hash);
     match store.get(&cache_key) {
         Ok(Some(bytes)) => {
-            let mut per_user_token: PerUserCachedToken = serde_json::from_slice(&bytes)
+            let per_user_token: PerUserCachedToken = serde_json::from_slice(&bytes)
                 .map_err(|e| anyhow::anyhow!("Failed to deserialize per-user cached token: {}", e))?;
 
-            // Update last accessed time
-            per_user_token.update_access_time(current_time);
-
+            // Return without updating - let caller check expiration first
             Ok(Some(per_user_token))
         }
         Ok(None) | Err(_) => Ok(None), // Key doesn't exist or error reading
@@ -504,18 +559,20 @@ async fn get_or_refresh_token_for_user(
     let username_hash = hash_username(&username);
 
     // Try to get cached token for this user
-    if let Some(per_user_token) = get_per_user_cached_token(&store, &username_hash, current_time).await? {
-        // Check if TTL expired (1 hour since last access)
+    if let Some(mut per_user_token) = get_per_user_cached_token(&store, &username_hash).await? {
+        // Check if TTL expired (1 hour since last access) - BEFORE updating access time
         if per_user_token.is_ttl_expired(current_time) {
-            println!("Per-user token TTL expired, cleaning up...");
+            println!("Per-user token TTL expired (inactive for {} seconds), cleaning up...",
+                current_time - per_user_token.last_accessed);
             cleanup_expired_user_token(&store, &username_hash).await?;
         } else if !per_user_token.token.is_expired(current_time) {
             // Token is still valid, update access time and save
-            println!("Using cached token for user (expires in {} seconds, TTL: {} seconds since last access)",
+            println!("Using cached token for user (expires in {} seconds, last accessed {} seconds ago)",
                 per_user_token.token.expires_at - current_time,
                 current_time - per_user_token.last_accessed);
 
-            // Save updated access time
+            // Update and save access time
+            per_user_token.update_access_time(current_time);
             save_per_user_token_to_cache(&store, &username_hash, &per_user_token).await?;
             return Ok(per_user_token.token);
         } else {
@@ -612,6 +669,20 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
             }
         }
     };
+
+    // Validate credentials before use (prevent DoS, ensure proper format)
+    if let Err(e) = validate_credentials(&username, &password) {
+        let error_json = serde_json::json!({
+            "error": "Invalid credentials",
+            "message": e.to_string(),
+            "version": VERSION
+        });
+        return Ok(add_cors_headers(Response::builder())
+            .status(400)
+            .header("content-type", "application/json")
+            .body(error_json.to_string())
+            .build());
+    }
 
     // Get VIN from environment variable or query parameter
     let vin = variables::get("vin").unwrap_or_else(|_| {
@@ -1001,19 +1072,24 @@ mod tests {
 
     #[test]
     fn test_hash_username() {
+        let test_key = b"test-hmac-key-for-testing";
         let username = "test@example.com";
-        let hash1 = hash_username(username);
-        let hash2 = hash_username(username);
+        let hash1 = hash_username_with_key(username, Some(test_key));
+        let hash2 = hash_username_with_key(username, Some(test_key));
 
         // Same username should produce same hash
         assert_eq!(hash1, hash2);
 
-        // Hash should be 64 characters (SHA256 in hex)
+        // Hash should be 64 characters (HMAC-SHA256 in hex)
         assert_eq!(hash1.len(), 64);
 
         // Different username should produce different hash
-        let hash3 = hash_username("different@example.com");
+        let hash3 = hash_username_with_key("different@example.com", Some(test_key));
         assert_ne!(hash1, hash3);
+
+        // Different key should produce different hash
+        let hash4 = hash_username_with_key(username, Some(b"different-key"));
+        assert_ne!(hash1, hash4);
     }
 
     #[test]

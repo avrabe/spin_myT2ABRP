@@ -24,8 +24,9 @@ base64 = "0.22"
 uuid = { version = "1.18", features = ["v4", "fast-rng"] }
 # Time handling
 chrono = "0.4"
-# SHA256 hashing for username privacy
+# HMAC-SHA256 for secure username hashing
 sha2 = "0.10"
+hmac = "0.12"
 
 myt = { path = "../myt" }
 serde = { workspace = true }
