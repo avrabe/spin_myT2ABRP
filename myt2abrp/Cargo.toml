@@ -20,6 +20,10 @@ http = "1.2.0"
 spin-sdk = { workspace = true }
 # Base64 encoding/decoding
 base64 = "0.22"
+# UUID generation
+uuid = { version = "1.18", features = ["v4", "fast-rng"] }
+# Time handling
+chrono = "0.4"
 
 myt = { path = "../myt" }
 serde = { workspace = true }
