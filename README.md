@@ -20,7 +20,10 @@ This application provides real-time vehicle battery status (State of Charge) fro
 - **Token Caching**: Intelligent token caching with automatic refresh (reduces latency from ~4s to ~200ms)
 - **Better Error Handling**: Comprehensive error messages and graceful degradation
 - **Proper UUID Generation**: Using standard UUID v4 for correlation IDs
-- **Comprehensive Testing**: 15+ unit tests covering all critical functionality
+- **Enhanced Telemetry**: Full vehicle data including SoC, charging status, range, and remaining charge time
+- **Health Endpoint**: Monitoring endpoint at `/health` for service health checks
+- **Proper HTTP Headers**: All responses include `Content-Type: application/json` and version information
+- **Comprehensive Testing**: 16 unit tests covering all critical functionality
 - **Zero Warnings**: Clean build with no compiler warnings
 
 ### 📊 Technical Details
@@ -29,6 +32,8 @@ This application provides real-time vehicle battery status (State of Charge) fro
 - **Language**: Rust 2021 Edition
 - **Target**: `wasm32-wasip1`
 - **Architecture**: Modular workspace with `myt` (API library) and `myt2abrp` (HTTP handler)
+- **API Endpoints**: Main endpoint (vehicle telemetry) + Health endpoint (monitoring)
+- **Response Format**: JSON with proper Content-Type headers and version info
 
 ## API Migration
 
@@ -109,6 +114,7 @@ cargo build --target wasm32-wasip1 --release
 
 ### Query the Service
 
+**Main endpoint** (vehicle status):
 ```sh
 curl http://127.0.0.1:3000/
 ```
@@ -117,9 +123,29 @@ curl http://127.0.0.1:3000/
 ```json
 {
   "soc": 85,
-  "access_date": "2025-01-01T12:00:00Z"
+  "access_date": "2025-01-01T12:00:00Z",
+  "charging_status": "CHARGING",
+  "ev_range": 250.5,
+  "ev_range_with_ac": 230.0,
+  "remaining_charge_time": 120,
+  "version": "0.1.0"
 }
 ```
+
+**Health endpoint**:
+```sh
+curl http://127.0.0.1:3000/health
+```
+
+**Expected Response:**
+```json
+{
+  "status": "healthy",
+  "version": "0.1.0"
+}
+```
+
+All responses include proper `Content-Type: application/json` headers.
 
 ## Authentication Flow
 
@@ -190,6 +216,10 @@ spin up --log-dir ./logs
 - ✅ Electric vehicle status parsing
 - ✅ Timestamp generation
 - ✅ Error handling paths
+- ✅ Enhanced response structure with all telemetry fields
+- ✅ Optional field handling in responses
+
+**Total: 16 tests** (9 in `myt` library, 7 in `myt2abrp` handler)
 
 Run tests with: `cargo test --lib --target x86_64-unknown-linux-gnu`
 
