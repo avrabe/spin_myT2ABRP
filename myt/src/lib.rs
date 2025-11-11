@@ -154,6 +154,91 @@ pub struct Authenticate {
     pub password: String,
 }
 
+// Vehicle List Structures
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct VehicleListResponse {
+    pub payload: VehicleListPayload,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct VehicleListPayload {
+    #[serde(rename = "vehicleInfo")]
+    pub vehicle_info: Vec<VehicleInfo>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct VehicleInfo {
+    pub vin: String,
+    pub model: Option<String>,
+    #[serde(rename = "modelName")]
+    pub model_name: Option<String>,
+    #[serde(rename = "modelYear")]
+    pub model_year: Option<String>,
+    pub alias: Option<String>,
+}
+
+// Location Structures
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct LocationResponse {
+    pub payload: LocationPayload,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct LocationPayload {
+    #[serde(rename = "vehicleInfo")]
+    pub vehicle_info: LocationVehicleInfo,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct LocationVehicleInfo {
+    #[serde(rename = "location")]
+    pub location: LocationData,
+    #[serde(rename = "lastUpdateTimestamp")]
+    pub last_update_timestamp: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct LocationData {
+    pub lat: f64,
+    pub lon: f64,
+}
+
+// Telemetry Structures
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TelemetryResponse {
+    pub payload: TelemetryPayload,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TelemetryPayload {
+    #[serde(rename = "vehicleInfo")]
+    pub vehicle_info: TelemetryVehicleInfo,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TelemetryVehicleInfo {
+    pub odometer: Option<TelemetryOdometer>,
+    #[serde(rename = "fuel")]
+    pub fuel: Option<TelemetryFuel>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TelemetryOdometer {
+    pub value: Option<f64>,
+    pub unit: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TelemetryFuel {
+    #[serde(rename = "fuelLevel")]
+    pub fuel_level: Option<i32>,
+    #[serde(rename = "rangeWithFuel")]
+    pub range_with_fuel: Option<f64>,
+}
+
 // New API Electric Status Structures
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -272,6 +357,24 @@ impl From<&[u8]> for ElectricStatusResponse {
                 panic!("Failed to parse electric status: {}", err);
             }
         }
+    }
+}
+
+impl From<&[u8]> for VehicleListResponse {
+    fn from(item: &[u8]) -> Self {
+        serde_json::from_slice(item).unwrap()
+    }
+}
+
+impl From<&[u8]> for LocationResponse {
+    fn from(item: &[u8]) -> Self {
+        serde_json::from_slice(item).unwrap()
+    }
+}
+
+impl From<&[u8]> for TelemetryResponse {
+    fn from(item: &[u8]) -> Self {
+        serde_json::from_slice(item).unwrap()
     }
 }
 
