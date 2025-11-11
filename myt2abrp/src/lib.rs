@@ -1,5 +1,6 @@
 use base64::{engine::general_purpose, Engine as _};
 use chrono::Utc;
+use hmac::{Hmac, Mac};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use myt::{
     AuthenticateRequest, AuthenticateResponse, CachedToken, ElectricStatusResponse,
@@ -8,7 +9,6 @@ use myt::{
 };
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use hmac::{Hmac, Mac};
 use spin_sdk::http::{IncomingRequest, IntoResponse, Request, Response};
 use spin_sdk::key_value::Store;
 use spin_sdk::{http_component, variables};
@@ -46,6 +46,7 @@ const HMAC_KEY_DEFAULT: &[u8] = b"toyota-myt-gateway-hmac-key-change-in-producti
 
 // Rate Limiting Settings
 const RATE_LIMIT_PER_USER_HOUR: u32 = 100; // 100 requests per user per hour
+#[allow(dead_code)] // Reserved for future IP-based rate limiting
 const RATE_LIMIT_PER_IP_HOUR: u32 = 1000; // 1000 requests per IP per hour
 const RATE_LIMIT_LOGIN_ATTEMPTS: u32 = 5; // 5 failed login attempts
 const RATE_LIMIT_LOGIN_LOCKOUT_SECONDS: i64 = 900; // 15 minutes lockout
@@ -118,10 +119,10 @@ struct AbrpTelemetry {
 // JWT Token Claims
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct Claims {
-    pub sub: String,      // Subject (username/email)
-    pub exp: i64,         // Expiration time
-    pub iat: i64,         // Issued at
-    pub jti: String,      // JWT ID (unique identifier)
+    pub sub: String,        // Subject (username/email)
+    pub exp: i64,           // Expiration time
+    pub iat: i64,           // Issued at
+    pub jti: String,        // JWT ID (unique identifier)
     pub token_type: String, // "access" or "refresh"
 }
 
@@ -243,7 +244,10 @@ fn validate_credentials(username: &str, password: &str) -> anyhow::Result<()> {
         anyhow::bail!("Username cannot be empty");
     }
     if username.len() > MAX_USERNAME_LENGTH {
-        anyhow::bail!("Username exceeds maximum length of {} characters", MAX_USERNAME_LENGTH);
+        anyhow::bail!(
+            "Username exceeds maximum length of {} characters",
+            MAX_USERNAME_LENGTH
+        );
     }
 
     // Validate password length
@@ -251,7 +255,10 @@ fn validate_credentials(username: &str, password: &str) -> anyhow::Result<()> {
         anyhow::bail!("Password cannot be empty");
     }
     if password.len() > MAX_PASSWORD_LENGTH {
-        anyhow::bail!("Password exceeds maximum length of {} characters", MAX_PASSWORD_LENGTH);
+        anyhow::bail!(
+            "Password exceeds maximum length of {} characters",
+            MAX_PASSWORD_LENGTH
+        );
     }
 
     // Basic format validation for username (should look like an email)
@@ -272,15 +279,12 @@ fn hash_username_with_key(username: &str, key: Option<&[u8]>) -> String {
     // Use provided key, or try to get from environment, or use default
     let hmac_key = match key {
         Some(k) => k.to_vec(),
-        None => {
-            variables::get("hmac_key")
-                .unwrap_or_else(|_| String::from_utf8_lossy(HMAC_KEY_DEFAULT).to_string())
-                .into_bytes()
-        }
+        None => variables::get("hmac_key")
+            .unwrap_or_else(|_| String::from_utf8_lossy(HMAC_KEY_DEFAULT).to_string())
+            .into_bytes(),
     };
 
-    let mut mac = HmacSha256::new_from_slice(&hmac_key)
-        .expect("HMAC can take key of any size");
+    let mut mac = HmacSha256::new_from_slice(&hmac_key).expect("HMAC can take key of any size");
     mac.update(username.as_bytes());
     let result = mac.finalize();
 
@@ -347,12 +351,8 @@ fn verify_token(token: &str) -> anyhow::Result<Claims> {
     let secret = get_jwt_secret();
     let validation = Validation::new(JWT_ALGORITHM);
 
-    let token_data = decode::<Claims>(
-        token,
-        &DecodingKey::from_secret(&secret),
-        &validation,
-    )
-    .map_err(|e| anyhow::anyhow!("Invalid token: {}", e))?;
+    let token_data = decode::<Claims>(token, &DecodingKey::from_secret(&secret), &validation)
+        .map_err(|e| anyhow::anyhow!("Invalid token: {}", e))?;
 
     Ok(token_data.claims)
 }
@@ -383,7 +383,8 @@ async fn revoke_token(store: &Store, jti: &str, exp: i64) -> anyhow::Result<()> 
 
     // Store with TTL - will auto-delete after token expires
     let value = vec![1u8];
-    store.set(&key, &value)
+    store
+        .set(&key, &value)
         .map_err(|e| anyhow::anyhow!("Failed to revoke token: {}", e))?;
 
     Ok(())
@@ -403,7 +404,7 @@ async fn check_rate_limit(
     let now = get_current_timestamp();
 
     let mut rate_info = match store.get(&key) {
-        Ok(Some(bytes)) => serde_json::from_slice::<RateLimitInfo>(&bytes).unwrap_or_else(|_| {
+        Ok(Some(bytes)) => serde_json::from_slice::<RateLimitInfo>(&bytes).unwrap_or({
             RateLimitInfo {
                 count: 0,
                 window_start: now,
@@ -451,7 +452,7 @@ async fn record_failed_login(store: &Store, identifier: &str) -> anyhow::Result<
     let now = get_current_timestamp();
 
     let mut rate_info = match store.get(&key) {
-        Ok(Some(bytes)) => serde_json::from_slice::<RateLimitInfo>(&bytes).unwrap_or_else(|_| {
+        Ok(Some(bytes)) => serde_json::from_slice::<RateLimitInfo>(&bytes).unwrap_or({
             RateLimitInfo {
                 count: 0,
                 window_start: now,
@@ -470,8 +471,10 @@ async fn record_failed_login(store: &Store, identifier: &str) -> anyhow::Result<
     // Trigger lockout after threshold
     if rate_info.count >= RATE_LIMIT_LOGIN_ATTEMPTS {
         rate_info.lockout_until = Some(now + RATE_LIMIT_LOGIN_LOCKOUT_SECONDS);
-        println!("User {} locked out for {} seconds after {} failed attempts",
-            identifier, RATE_LIMIT_LOGIN_LOCKOUT_SECONDS, rate_info.count);
+        println!(
+            "User {} locked out for {} seconds after {} failed attempts",
+            identifier, RATE_LIMIT_LOGIN_LOCKOUT_SECONDS, rate_info.count
+        );
     }
 
     let bytes = serde_json::to_vec(&rate_info)?;
@@ -509,12 +512,14 @@ async fn create_session(
 
     let key = format!("{}{}", SESSION_KEY_PREFIX, session_id);
     let bytes = serde_json::to_vec(&session)?;
-    store.set(&key, &bytes)
+    store
+        .set(&key, &bytes)
         .map_err(|e| anyhow::anyhow!("Failed to create session: {}", e))?;
 
     Ok(())
 }
 
+#[allow(dead_code)] // Reserved for future session management features
 async fn get_session(store: &Store, session_id: &str) -> anyhow::Result<Option<Session>> {
     let key = format!("{}{}", SESSION_KEY_PREFIX, session_id);
     match store.get(&key) {
@@ -526,9 +531,11 @@ async fn get_session(store: &Store, session_id: &str) -> anyhow::Result<Option<S
     }
 }
 
+#[allow(dead_code)] // Reserved for future session management features
 async fn delete_session(store: &Store, session_id: &str) -> anyhow::Result<()> {
     let key = format!("{}{}", SESSION_KEY_PREFIX, session_id);
-    store.delete(&key)
+    store
+        .delete(&key)
         .map_err(|e| anyhow::anyhow!("Failed to delete session: {}", e))?;
     Ok(())
 }
@@ -546,8 +553,10 @@ async fn get_per_user_cached_token(
     let cache_key = get_user_token_cache_key(username_hash);
     match store.get(&cache_key) {
         Ok(Some(bytes)) => {
-            let per_user_token: PerUserCachedToken = serde_json::from_slice(&bytes)
-                .map_err(|e| anyhow::anyhow!("Failed to deserialize per-user cached token: {}", e))?;
+            let per_user_token: PerUserCachedToken =
+                serde_json::from_slice(&bytes).map_err(|e| {
+                    anyhow::anyhow!("Failed to deserialize per-user cached token: {}", e)
+                })?;
 
             // Return without updating - let caller check expiration first
             Ok(Some(per_user_token))
@@ -570,10 +579,7 @@ async fn save_per_user_token_to_cache(
     Ok(())
 }
 
-async fn cleanup_expired_user_token(
-    store: &Store,
-    username_hash: &str,
-) -> anyhow::Result<()> {
+async fn cleanup_expired_user_token(store: &Store, username_hash: &str) -> anyhow::Result<()> {
     let cache_key = get_user_token_cache_key(username_hash);
     store
         .delete(&cache_key)
@@ -582,9 +588,7 @@ async fn cleanup_expired_user_token(
     Ok(())
 }
 
-async fn refresh_access_token(
-    refresh_token: String,
-) -> anyhow::Result<(TokenResponse, String)> {
+async fn refresh_access_token(refresh_token: String) -> anyhow::Result<(TokenResponse, String)> {
     println!("Refreshing access token...");
 
     let refresh_request = RefreshTokenRequest::new(refresh_token.clone());
@@ -743,10 +747,7 @@ async fn fetch_vehicle_location(
     let response = send_request(request).await?;
 
     if *response.status() != 200 {
-        anyhow::bail!(
-            "Location request failed with status: {}",
-            response.status()
-        );
+        anyhow::bail!("Location request failed with status: {}", response.status());
     }
 
     Ok(serde_json::from_slice(response.body())?)
@@ -812,10 +813,15 @@ fn parse_iso8601_to_timestamp(iso_string: &str) -> i64 {
     Utc::now().timestamp()
 }
 
-fn add_cors_headers(mut builder: spin_sdk::http::ResponseBuilder) -> spin_sdk::http::ResponseBuilder {
+fn add_cors_headers(
+    mut builder: spin_sdk::http::ResponseBuilder,
+) -> spin_sdk::http::ResponseBuilder {
     builder.header("access-control-allow-origin", "*");
     builder.header("access-control-allow-methods", "GET, OPTIONS");
-    builder.header("access-control-allow-headers", "Content-Type, Authorization");
+    builder.header(
+        "access-control-allow-headers",
+        "Content-Type, Authorization",
+    );
     builder
 }
 
@@ -833,14 +839,18 @@ async fn get_or_refresh_token_for_user(
     if let Some(mut per_user_token) = get_per_user_cached_token(&store, &username_hash).await? {
         // Check if TTL expired (1 hour since last access) - BEFORE updating access time
         if per_user_token.is_ttl_expired(current_time) {
-            println!("Per-user token TTL expired (inactive for {} seconds), cleaning up...",
-                current_time - per_user_token.last_accessed);
+            println!(
+                "Per-user token TTL expired (inactive for {} seconds), cleaning up...",
+                current_time - per_user_token.last_accessed
+            );
             cleanup_expired_user_token(&store, &username_hash).await?;
         } else if !per_user_token.token.is_expired(current_time) {
             // Token is still valid, update access time and save
-            println!("Using cached token for user (expires in {} seconds, last accessed {} seconds ago)",
+            println!(
+                "Using cached token for user (expires in {} seconds, last accessed {} seconds ago)",
                 per_user_token.token.expires_at - current_time,
-                current_time - per_user_token.last_accessed);
+                current_time - per_user_token.last_accessed
+            );
 
             // Update and save access time
             per_user_token.update_access_time(current_time);
@@ -859,11 +869,15 @@ async fn get_or_refresh_token_for_user(
                         current_time,
                         TOKEN_TTL_SECONDS,
                     );
-                    save_per_user_token_to_cache(&store, &username_hash, &new_per_user_token).await?;
+                    save_per_user_token_to_cache(&store, &username_hash, &new_per_user_token)
+                        .await?;
                     return Ok(new_cached_token);
                 }
                 Err(e) => {
-                    println!("Token refresh failed: {}. Performing full authentication...", e);
+                    println!(
+                        "Token refresh failed: {}. Performing full authentication...",
+                        e
+                    );
                     cleanup_expired_user_token(&store, &username_hash).await?;
                 }
             }
@@ -876,7 +890,8 @@ async fn get_or_refresh_token_for_user(
     let (token_response, uuid) = perform_full_oauth_flow(username, password).await?;
 
     let cached_token = CachedToken::from_token_response(token_response, uuid, current_time);
-    let per_user_token = PerUserCachedToken::new(cached_token.clone(), current_time, TOKEN_TTL_SECONDS);
+    let per_user_token =
+        PerUserCachedToken::new(cached_token.clone(), current_time, TOKEN_TTL_SECONDS);
     save_per_user_token_to_cache(&store, &username_hash, &per_user_token).await?;
 
     Ok(cached_token)
@@ -899,10 +914,13 @@ async fn handle_login(request: IncomingRequest) -> Result<Response, anyhow::Erro
         return Ok(Response::builder()
             .status(400)
             .header("content-type", "application/json")
-            .body(serde_json::json!({
-                "error": "Invalid credentials format",
-                "message": e.to_string()
-            }).to_string())
+            .body(
+                serde_json::json!({
+                    "error": "Invalid credentials format",
+                    "message": e.to_string()
+                })
+                .to_string(),
+            )
             .build());
     }
 
@@ -931,7 +949,14 @@ async fn handle_login(request: IncomingRequest) -> Result<Response, anyhow::Erro
             let session_id = Uuid::new_v4().to_string();
             let ip_address = None; // Could extract from headers if available
             let user_agent = None; // Could extract from headers if available
-            create_session(&store, &login_req.username, &session_id, ip_address, user_agent).await?;
+            create_session(
+                &store,
+                &login_req.username,
+                &session_id,
+                ip_address,
+                user_agent,
+            )
+            .await?;
 
             // Clear failed login attempts
             clear_failed_logins(&store, &login_req.username).await?;
@@ -956,10 +981,13 @@ async fn handle_login(request: IncomingRequest) -> Result<Response, anyhow::Erro
             Ok(Response::builder()
                 .status(401)
                 .header("content-type", "application/json")
-                .body(serde_json::json!({
-                    "error": "Authentication failed",
-                    "message": "Invalid username or password"
-                }).to_string())
+                .body(
+                    serde_json::json!({
+                        "error": "Authentication failed",
+                        "message": "Invalid username or password"
+                    })
+                    .to_string(),
+                )
                 .build())
         }
     }
@@ -980,10 +1008,13 @@ async fn handle_refresh(request: IncomingRequest) -> Result<Response, anyhow::Er
                 return Ok(Response::builder()
                     .status(401)
                     .header("content-type", "application/json")
-                    .body(serde_json::json!({
-                        "error": "Invalid token type",
-                        "message": "Token is not a refresh token"
-                    }).to_string())
+                    .body(
+                        serde_json::json!({
+                            "error": "Invalid token type",
+                            "message": "Token is not a refresh token"
+                        })
+                        .to_string(),
+                    )
                     .build());
             }
             claims
@@ -992,10 +1023,13 @@ async fn handle_refresh(request: IncomingRequest) -> Result<Response, anyhow::Er
             return Ok(Response::builder()
                 .status(401)
                 .header("content-type", "application/json")
-                .body(serde_json::json!({
-                    "error": "Invalid token",
-                    "message": "Token is expired or invalid"
-                }).to_string())
+                .body(
+                    serde_json::json!({
+                        "error": "Invalid token",
+                        "message": "Token is expired or invalid"
+                    })
+                    .to_string(),
+                )
                 .build());
         }
     };
@@ -1005,10 +1039,13 @@ async fn handle_refresh(request: IncomingRequest) -> Result<Response, anyhow::Er
         return Ok(Response::builder()
             .status(401)
             .header("content-type", "application/json")
-            .body(serde_json::json!({
-                "error": "Token revoked",
-                "message": "This refresh token has been revoked"
-            }).to_string())
+            .body(
+                serde_json::json!({
+                    "error": "Token revoked",
+                    "message": "This refresh token has been revoked"
+                })
+                .to_string(),
+            )
             .build());
     }
 
@@ -1038,10 +1075,13 @@ async fn handle_logout(request: &IncomingRequest) -> Result<Response, anyhow::Er
             return Ok(Response::builder()
                 .status(401)
                 .header("content-type", "application/json")
-                .body(serde_json::json!({
-                    "error": "No token provided",
-                    "message": "Authorization header with Bearer token required"
-                }).to_string())
+                .body(
+                    serde_json::json!({
+                        "error": "No token provided",
+                        "message": "Authorization header with Bearer token required"
+                    })
+                    .to_string(),
+                )
                 .build());
         }
     };
@@ -1053,9 +1093,12 @@ async fn handle_logout(request: &IncomingRequest) -> Result<Response, anyhow::Er
             return Ok(Response::builder()
                 .status(401)
                 .header("content-type", "application/json")
-                .body(serde_json::json!({
-                    "error": "Invalid token"
-                }).to_string())
+                .body(
+                    serde_json::json!({
+                        "error": "Invalid token"
+                    })
+                    .to_string(),
+                )
                 .build());
         }
     };
@@ -1069,9 +1112,12 @@ async fn handle_logout(request: &IncomingRequest) -> Result<Response, anyhow::Er
     Ok(Response::builder()
         .status(200)
         .header("content-type", "application/json")
-        .body(serde_json::json!({
-            "message": "Logged out successfully"
-        }).to_string())
+        .body(
+            serde_json::json!({
+                "message": "Logged out successfully"
+            })
+            .to_string(),
+        )
         .build())
 }
 
@@ -1105,15 +1151,21 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
 
     // Auth endpoints (handle login, refresh, logout)
     if path == "/auth/login" && method == spin_sdk::http::Method::Post {
-        return handle_login(request).await.map(|r| add_cors_headers(r.into_builder()).build());
+        return handle_login(request)
+            .await
+            .map(|r| add_cors_headers(r.into_builder()).build());
     }
 
     if path == "/auth/refresh" && method == spin_sdk::http::Method::Post {
-        return handle_refresh(request).await.map(|r| add_cors_headers(r.into_builder()).build());
+        return handle_refresh(request)
+            .await
+            .map(|r| add_cors_headers(r.into_builder()).build());
     }
 
     if path == "/auth/logout" && method == spin_sdk::http::Method::Post {
-        return handle_logout(&request).await.map(|r| add_cors_headers(r.into_builder()).build());
+        return handle_logout(&request)
+            .await
+            .map(|r| add_cors_headers(r.into_builder()).build());
     }
 
     // All other endpoints require Bearer token authentication
@@ -1322,7 +1374,10 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
         let request = Request::get(&status_url)
             .header("content-type", "application/json")
             .header("accept", "application/json")
-            .header("authorization", format!("Bearer {}", toyota_token.access_token))
+            .header(
+                "authorization",
+                format!("Bearer {}", toyota_token.access_token),
+            )
             .header("datetime", get_timestamp_ms())
             .header("x-correlationid", Uuid::new_v4().to_string())
             .build();
@@ -1366,21 +1421,28 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
 
         let charge_info = &electric_status.payload.vehicle_info.charge_info;
         let soc = charge_info.charge_remaining_amount.unwrap_or(0) as f64;
-        let utc = parse_iso8601_to_timestamp(&electric_status.payload.vehicle_info.last_update_timestamp);
+        let utc =
+            parse_iso8601_to_timestamp(&electric_status.payload.vehicle_info.last_update_timestamp);
 
         // Determine if charging
         let is_charging = charge_info.charging_status.as_ref().map(|status| {
-            status.to_uppercase().contains("CHARGING") || status.to_uppercase().contains("CONNECTED")
+            status.to_uppercase().contains("CHARGING")
+                || status.to_uppercase().contains("CONNECTED")
         });
 
         let abrp_data = AbrpTelemetry {
             utc,
             soc,
-            lat: location.as_ref().map(|l| l.payload.vehicle_info.location.lat),
-            lon: location.as_ref().map(|l| l.payload.vehicle_info.location.lon),
+            lat: location
+                .as_ref()
+                .map(|l| l.payload.vehicle_info.location.lat),
+            lon: location
+                .as_ref()
+                .map(|l| l.payload.vehicle_info.location.lon),
             is_charging,
             is_parked: None, // Not available from Toyota API
-            odometer: telemetry.as_ref()
+            odometer: telemetry
+                .as_ref()
                 .and_then(|t| t.payload.vehicle_info.odometer.as_ref())
                 .and_then(|o| o.value),
             est_battery_range: charge_info.ev_range.map(|r| r as f64),
@@ -1454,10 +1516,7 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
     let charge_info = &electric_status.payload.vehicle_info.charge_info;
 
     let soc = charge_info.charge_remaining_amount.unwrap_or(0);
-    let access_date = electric_status
-        .payload
-        .vehicle_info
-        .last_update_timestamp;
+    let access_date = electric_status.payload.vehicle_info.last_update_timestamp;
 
     let return_value = CurrentStatus::new(
         soc,
