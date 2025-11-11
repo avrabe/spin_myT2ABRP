@@ -6,6 +6,7 @@ use myt::{
     VehicleListResponse,
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Sha256, Digest};
 use spin_sdk::http::{IncomingRequest, IntoResponse, Request, Response};
 use spin_sdk::key_value::Store;
 use spin_sdk::{http_component, variables};
@@ -18,7 +19,8 @@ const TOKEN_URL: &str =
     "https://b2c-login.toyota-europe.com/oauth2/realms/root/realms/tme/access_token";
 const API_BASE: &str = "https://ctpa-oneapi.tceu-ctp-prd.toyotaconnectedeurope.io";
 
-const TOKEN_CACHE_KEY: &str = "toyota_auth_token";
+const TOKEN_CACHE_KEY_PREFIX: &str = "toyota_auth_token_";
+const TOKEN_TTL_SECONDS: i64 = 3600; // 1 hour TTL for per-user tokens
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -82,6 +84,31 @@ struct AbrpTelemetry {
     pub version: String,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct PerUserCachedToken {
+    pub token: CachedToken,
+    pub last_accessed: i64, // Unix timestamp
+    pub ttl_seconds: i64,
+}
+
+impl PerUserCachedToken {
+    pub fn new(token: CachedToken, current_time: i64, ttl_seconds: i64) -> Self {
+        PerUserCachedToken {
+            token,
+            last_accessed: current_time,
+            ttl_seconds,
+        }
+    }
+
+    pub fn is_ttl_expired(&self, current_time: i64) -> bool {
+        (current_time - self.last_accessed) > self.ttl_seconds
+    }
+
+    pub fn update_access_time(&mut self, current_time: i64) {
+        self.last_accessed = current_time;
+    }
+}
+
 fn get_timestamp_ms() -> String {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -128,29 +155,104 @@ fn decode_jwt_uuid(id_token: &str) -> anyhow::Result<String> {
         .map(|s| s.to_string())
 }
 
+fn extract_basic_auth(request: &IncomingRequest) -> Option<(String, String)> {
+    // Look for Authorization header by iterating over headers
+    let headers = request.headers();
+    let mut auth_value_str = None;
+
+    for (name, value) in headers.entries() {
+        if name.to_lowercase() == "authorization" {
+            auth_value_str = Some(String::from_utf8_lossy(&value).to_string());
+            break;
+        }
+    }
+
+    let auth_value = auth_value_str?;
+
+    // Check if it starts with "Basic "
+    if !auth_value.starts_with("Basic ") {
+        return None;
+    }
+
+    // Extract base64 part
+    let base64_part = auth_value.strip_prefix("Basic ")?;
+
+    // Decode base64
+    let decoded = general_purpose::STANDARD
+        .decode(base64_part.trim().as_bytes())
+        .ok()?;
+
+    let decoded_str = String::from_utf8(decoded).ok()?;
+
+    // Split on first ':'
+    let parts: Vec<&str> = decoded_str.splitn(2, ':').collect();
+    if parts.len() != 2 {
+        return None;
+    }
+
+    Some((parts[0].to_string(), parts[1].to_string()))
+}
+
+fn hash_username(username: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(username.as_bytes());
+    let result = hasher.finalize();
+    format!("{:x}", result)
+}
+
+fn get_user_token_cache_key(username_hash: &str) -> String {
+    format!("{}{}", TOKEN_CACHE_KEY_PREFIX, username_hash)
+}
+
 async fn send_request(request: Request) -> anyhow::Result<Response> {
     spin_sdk::http::send(request)
         .await
         .map_err(|e| anyhow::anyhow!("HTTP request failed: {:?}", e))
 }
 
-async fn get_cached_token(store: &Store) -> anyhow::Result<Option<CachedToken>> {
-    match store.get(TOKEN_CACHE_KEY) {
+async fn get_per_user_cached_token(
+    store: &Store,
+    username_hash: &str,
+    current_time: i64,
+) -> anyhow::Result<Option<PerUserCachedToken>> {
+    let cache_key = get_user_token_cache_key(username_hash);
+    match store.get(&cache_key) {
         Ok(Some(bytes)) => {
-            let token: CachedToken = serde_json::from_slice(&bytes)
-                .map_err(|e| anyhow::anyhow!("Failed to deserialize cached token: {}", e))?;
-            Ok(Some(token))
+            let mut per_user_token: PerUserCachedToken = serde_json::from_slice(&bytes)
+                .map_err(|e| anyhow::anyhow!("Failed to deserialize per-user cached token: {}", e))?;
+
+            // Update last accessed time
+            per_user_token.update_access_time(current_time);
+
+            Ok(Some(per_user_token))
         }
         Ok(None) | Err(_) => Ok(None), // Key doesn't exist or error reading
     }
 }
 
-async fn save_token_to_cache(store: &Store, token: &CachedToken) -> anyhow::Result<()> {
-    let bytes = serde_json::to_vec(token)
-        .map_err(|e| anyhow::anyhow!("Failed to serialize token for caching: {}", e))?;
+async fn save_per_user_token_to_cache(
+    store: &Store,
+    username_hash: &str,
+    per_user_token: &PerUserCachedToken,
+) -> anyhow::Result<()> {
+    let cache_key = get_user_token_cache_key(username_hash);
+    let bytes = serde_json::to_vec(per_user_token)
+        .map_err(|e| anyhow::anyhow!("Failed to serialize per-user token for caching: {}", e))?;
     store
-        .set(TOKEN_CACHE_KEY, &bytes)
-        .map_err(|e| anyhow::anyhow!("Failed to save token to cache: {}", e))?;
+        .set(&cache_key, &bytes)
+        .map_err(|e| anyhow::anyhow!("Failed to save per-user token to cache: {}", e))?;
+    Ok(())
+}
+
+async fn cleanup_expired_user_token(
+    store: &Store,
+    username_hash: &str,
+) -> anyhow::Result<()> {
+    let cache_key = get_user_token_cache_key(username_hash);
+    store
+        .delete(&cache_key)
+        .map_err(|e| anyhow::anyhow!("Failed to delete expired token from cache: {}", e))?;
+    println!("Cleaned up expired token for user");
     Ok(())
 }
 
@@ -387,11 +489,11 @@ fn parse_iso8601_to_timestamp(iso_string: &str) -> i64 {
 fn add_cors_headers(mut builder: spin_sdk::http::ResponseBuilder) -> spin_sdk::http::ResponseBuilder {
     builder.header("access-control-allow-origin", "*");
     builder.header("access-control-allow-methods", "GET, OPTIONS");
-    builder.header("access-control-allow-headers", "Content-Type");
+    builder.header("access-control-allow-headers", "Content-Type, Authorization");
     builder
 }
 
-async fn get_or_refresh_token(
+async fn get_or_refresh_token_for_user(
     username: String,
     password: String,
 ) -> anyhow::Result<CachedToken> {
@@ -399,37 +501,55 @@ async fn get_or_refresh_token(
         .map_err(|e| anyhow::anyhow!("Failed to open key-value store: {}", e))?;
 
     let current_time = get_current_timestamp();
+    let username_hash = hash_username(&username);
 
-    // Try to get cached token
-    if let Some(cached_token) = get_cached_token(&store).await? {
-        if !cached_token.is_expired(current_time) {
-            println!("Using cached token (expires in {} seconds)", cached_token.expires_at - current_time);
-            return Ok(cached_token);
-        }
+    // Try to get cached token for this user
+    if let Some(per_user_token) = get_per_user_cached_token(&store, &username_hash, current_time).await? {
+        // Check if TTL expired (1 hour since last access)
+        if per_user_token.is_ttl_expired(current_time) {
+            println!("Per-user token TTL expired, cleaning up...");
+            cleanup_expired_user_token(&store, &username_hash).await?;
+        } else if !per_user_token.token.is_expired(current_time) {
+            // Token is still valid, update access time and save
+            println!("Using cached token for user (expires in {} seconds, TTL: {} seconds since last access)",
+                per_user_token.token.expires_at - current_time,
+                current_time - per_user_token.last_accessed);
 
-        println!("Cached token expired, attempting refresh...");
+            // Save updated access time
+            save_per_user_token_to_cache(&store, &username_hash, &per_user_token).await?;
+            return Ok(per_user_token.token);
+        } else {
+            println!("Cached token expired, attempting refresh...");
 
-        // Try to refresh the token
-        match refresh_access_token(cached_token.refresh_token.clone()).await {
-            Ok((token_response, uuid)) => {
-                let new_cached_token =
-                    CachedToken::from_token_response(token_response, uuid, current_time);
-                save_token_to_cache(&store, &new_cached_token).await?;
-                return Ok(new_cached_token);
-            }
-            Err(e) => {
-                println!("Token refresh failed: {}. Performing full authentication...", e);
+            // Try to refresh the token
+            match refresh_access_token(per_user_token.token.refresh_token.clone()).await {
+                Ok((token_response, uuid)) => {
+                    let new_cached_token =
+                        CachedToken::from_token_response(token_response, uuid, current_time);
+                    let new_per_user_token = PerUserCachedToken::new(
+                        new_cached_token.clone(),
+                        current_time,
+                        TOKEN_TTL_SECONDS,
+                    );
+                    save_per_user_token_to_cache(&store, &username_hash, &new_per_user_token).await?;
+                    return Ok(new_cached_token);
+                }
+                Err(e) => {
+                    println!("Token refresh failed: {}. Performing full authentication...", e);
+                    cleanup_expired_user_token(&store, &username_hash).await?;
+                }
             }
         }
     } else {
-        println!("No cached token found");
+        println!("No cached token found for user");
     }
 
     // Perform full OAuth flow
     let (token_response, uuid) = perform_full_oauth_flow(username, password).await?;
 
     let cached_token = CachedToken::from_token_response(token_response, uuid, current_time);
-    save_token_to_cache(&store, &cached_token).await?;
+    let per_user_token = PerUserCachedToken::new(cached_token.clone(), current_time, TOKEN_TTL_SECONDS);
+    save_per_user_token_to_cache(&store, &username_hash, &per_user_token).await?;
 
     Ok(cached_token)
 }
@@ -463,15 +583,57 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
             .build());
     }
 
-    let username = variables::get("username")
-        .map_err(|e| anyhow::anyhow!("Failed to get username variable: {}", e))?;
-    let password = variables::get("password")
-        .map_err(|e| anyhow::anyhow!("Failed to get password variable: {}", e))?;
-    let vin =
-        variables::get("vin").map_err(|e| anyhow::anyhow!("Failed to get vin variable: {}", e))?;
+    // Get credentials: prioritize Basic Auth, fallback to environment variables
+    let (username, password) = match extract_basic_auth(&request) {
+        Some((user, pass)) => {
+            println!("Using Basic Auth credentials");
+            (user, pass)
+        }
+        None => {
+            // Try environment variables for backward compatibility
+            match (variables::get("username"), variables::get("password")) {
+                (Ok(user), Ok(pass)) => {
+                    println!("Using environment variable credentials");
+                    (user, pass)
+                }
+                _ => {
+                    let error_json = serde_json::json!({
+                        "error": "Authentication required",
+                        "message": "Please provide credentials via Basic Auth header or environment variables",
+                        "version": VERSION
+                    });
+                    return Ok(add_cors_headers(Response::builder())
+                        .status(401)
+                        .header("content-type", "application/json")
+                        .header("www-authenticate", "Basic realm=\"Toyota MyT Gateway\"")
+                        .body(error_json.to_string())
+                        .build());
+                }
+            }
+        }
+    };
 
-    // Get or refresh authentication token
-    let cached_token = match get_or_refresh_token(username, password).await {
+    // Get VIN from environment variable or query parameter
+    let vin = variables::get("vin").unwrap_or_else(|_| {
+        // Could also support VIN from query parameter in future
+        "".to_string()
+    });
+
+    if vin.is_empty() && path != "/vehicles" {
+        let error_json = serde_json::json!({
+            "error": "VIN required",
+            "message": "VIN must be configured via environment variable",
+            "version": VERSION
+        });
+        return Ok(add_cors_headers(Response::builder())
+            .status(400)
+            .header("content-type", "application/json")
+            .body(error_json.to_string())
+            .build());
+    }
+
+    // Get or refresh authentication token for this user
+    let cached_token = match get_or_refresh_token_for_user(username, password).await {
         Ok(token) => token,
         Err(e) => {
             println!("Authentication failed: {}", e);
@@ -835,5 +997,82 @@ mod tests {
         assert!(!timestamp.is_empty());
         // Should be a valid number
         assert!(timestamp.parse::<u128>().is_ok());
+    }
+
+    #[test]
+    fn test_hash_username() {
+        let username = "test@example.com";
+        let hash1 = hash_username(username);
+        let hash2 = hash_username(username);
+
+        // Same username should produce same hash
+        assert_eq!(hash1, hash2);
+
+        // Hash should be 64 characters (SHA256 in hex)
+        assert_eq!(hash1.len(), 64);
+
+        // Different username should produce different hash
+        let hash3 = hash_username("different@example.com");
+        assert_ne!(hash1, hash3);
+    }
+
+    #[test]
+    fn test_get_user_token_cache_key() {
+        let username_hash = "abc123";
+        let cache_key = get_user_token_cache_key(username_hash);
+
+        assert!(cache_key.starts_with(TOKEN_CACHE_KEY_PREFIX));
+        assert!(cache_key.contains("abc123"));
+        assert_eq!(cache_key, format!("{}abc123", TOKEN_CACHE_KEY_PREFIX));
+    }
+
+    #[test]
+    fn test_per_user_cached_token_ttl() {
+        let token = CachedToken {
+            access_token: "test_access".to_string(),
+            refresh_token: "test_refresh".to_string(),
+            id_token: "test_id".to_string(),
+            uuid: "test_uuid".to_string(),
+            expires_at: 5000,
+        };
+
+        let current_time = 1000;
+        let ttl_seconds = 3600;
+
+        let per_user_token = PerUserCachedToken::new(token, current_time, ttl_seconds);
+
+        // Should not be TTL expired immediately
+        assert!(!per_user_token.is_ttl_expired(current_time));
+
+        // Should not be TTL expired within TTL window
+        assert!(!per_user_token.is_ttl_expired(current_time + 3500));
+
+        // Should be TTL expired after TTL window
+        assert!(per_user_token.is_ttl_expired(current_time + 3601));
+
+        // Last accessed should be updated
+        assert_eq!(per_user_token.last_accessed, current_time);
+    }
+
+    #[test]
+    fn test_per_user_cached_token_update_access_time() {
+        let token = CachedToken {
+            access_token: "test_access".to_string(),
+            refresh_token: "test_refresh".to_string(),
+            id_token: "test_id".to_string(),
+            uuid: "test_uuid".to_string(),
+            expires_at: 5000,
+        };
+
+        let current_time = 1000;
+        let mut per_user_token = PerUserCachedToken::new(token, current_time, 3600);
+
+        assert_eq!(per_user_token.last_accessed, current_time);
+
+        // Update access time
+        let new_time = 2000;
+        per_user_token.update_access_time(new_time);
+
+        assert_eq!(per_user_token.last_accessed, new_time);
     }
 }

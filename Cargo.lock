@@ -442,6 +442,7 @@ dependencies = [
  "myt",
  "serde",
  "serde_json",
+ "sha2",
  "spin-sdk",
  "uuid",
 ]
