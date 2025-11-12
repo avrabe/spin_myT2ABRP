@@ -8,7 +8,9 @@ members = [
 
 
 [workspace.dependencies]
-serde = { version = "1.0.218", features = ["derive"]}
-serde_json = { version = "1.0.139" }
-bytes = "1.10.0"
+serde = { version = "1.0.228", features = ["derive"]}
+serde_json = { version = "1.0.145" }
+serde_path_to_error = "0.1.20"
+anyhow = "1.0.100"
+bytes = "1.10.1"
 spin-sdk = "5.1.1"
