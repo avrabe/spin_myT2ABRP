@@ -14,6 +14,8 @@ base = "/"
 jwt_secret = { required = false, secret = true }
 # HMAC key for secure username hashing (CRITICAL: set to random value in production)
 hmac_key = { required = false, secret = true }
+# CORS allowed origin (set to your domain, defaults to * which is insecure)
+cors_origin = { required = false }
 # VIN is still required unless using /vehicles endpoint only
 vin = { required = false }
 
@@ -34,4 +36,5 @@ watch = ["myt2abrp/src/**/*.rs", "myt2abrp/Cargo.toml", "Cargo.toml", "myt/src/*
 [component.myt2abrp.variables]
 jwt_secret = "{{ jwt_secret }}"
 hmac_key = "{{ hmac_key }}"
+cors_origin = "{{ cors_origin }}"
 vin = "{{ vin }}"
