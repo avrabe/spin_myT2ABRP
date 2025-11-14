@@ -270,6 +270,28 @@ impl PerUserCachedToken {
     }
 }
 
+// Cached vehicle data with TTL
+#[derive(Serialize, Deserialize, Debug)]
+struct CachedVehicleData {
+    pub data: String,      // JSON-serialized response data
+    pub cached_at: i64,     // Unix timestamp when cached
+    pub ttl_seconds: i64,   // Time to live in seconds
+}
+
+impl CachedVehicleData {
+    pub fn new(data: String, current_time: i64, ttl_seconds: i64) -> Self {
+        CachedVehicleData {
+            data,
+            cached_at: current_time,
+            ttl_seconds,
+        }
+    }
+
+    pub fn is_expired(&self, current_time: i64) -> bool {
+        (current_time - self.cached_at) > self.ttl_seconds
+    }
+}
+
 fn get_timestamp_ms() -> String {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -676,10 +698,112 @@ async fn delete_session(store: &Store, session_id: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+// ============================================================================
+// VEHICLE DATA CACHING FUNCTIONS
+// ============================================================================
+
+/// Get cached vehicle data if it exists and is not expired
+async fn get_cached_vehicle_data(
+    store: &Store,
+    vin: &str,
+    data_type: &str, // "status", "location", or "telemetry"
+) -> anyhow::Result<Option<String>> {
+    let key = format!("{}{}{}", VEHICLE_DATA_CACHE_KEY_PREFIX, vin, data_type);
+
+    match store.get(&key) {
+        Ok(Some(bytes)) => {
+            let cached: CachedVehicleData = serde_json::from_slice(&bytes)?;
+            let now = get_current_timestamp();
+
+            if cached.is_expired(now) {
+                debug!("Cache expired for VIN {} data_type {}", vin, data_type);
+                // Delete expired cache
+                let _ = store.delete(&key);
+                Ok(None)
+            } else {
+                debug!("Cache hit for VIN {} data_type {} (age: {} seconds)",
+                       vin, data_type, now - cached.cached_at);
+                Ok(Some(cached.data))
+            }
+        }
+        _ => {
+            debug!("Cache miss for VIN {} data_type {}", vin, data_type);
+            Ok(None)
+        }
+    }
+}
+
+/// Store vehicle data in cache with TTL
+async fn set_cached_vehicle_data(
+    store: &Store,
+    vin: &str,
+    data_type: &str, // "status", "location", or "telemetry"
+    data: &str,
+) -> anyhow::Result<()> {
+    let key = format!("{}{}{}", VEHICLE_DATA_CACHE_KEY_PREFIX, vin, data_type);
+    let now = get_current_timestamp();
+
+    let cached = CachedVehicleData::new(
+        data.to_string(),
+        now,
+        VEHICLE_DATA_TTL_SECONDS,
+    );
+
+    let bytes = serde_json::to_vec(&cached)?;
+    store.set(&key, &bytes)?;
+
+    debug!("Cached vehicle data for VIN {} data_type {} (TTL: {} seconds)",
+           vin, data_type, VEHICLE_DATA_TTL_SECONDS);
+
+    Ok(())
+}
+
 async fn send_request(request: Request) -> anyhow::Result<Response> {
     spin_sdk::http::send(request)
         .await
         .map_err(|e| anyhow::anyhow!("HTTP request failed: {:?}", e))
+}
+
+/// Fetch electric status with caching support
+async fn fetch_or_get_cached_electric_status(
+    store: &Store,
+    token: &CachedToken,
+    vin: &str,
+) -> anyhow::Result<(ElectricStatusResponse, bool)> {
+    // Check cache first
+    if let Ok(Some(cached_data)) = get_cached_vehicle_data(store, vin, "_status").await {
+        debug!("Using cached electric status for VIN {}", vin);
+        let status: ElectricStatusResponse = serde_json::from_str(&cached_data)?;
+        return Ok((status, true)); // true = from cache
+    }
+
+    // Cache miss - fetch from API
+    debug!("Fetching electric status from API for VIN {}", vin);
+    let status_url = format!("{}/v1/global/remote/electric/status?vin={}", API_BASE, vin);
+    let request = Request::get(&status_url)
+        .header("content-type", "application/json")
+        .header("accept", "application/json")
+        .header("authorization", format!("Bearer {}", token.access_token))
+        .header("datetime", get_timestamp_ms())
+        .header("x-correlationid", Uuid::new_v4().to_string())
+        .build();
+
+    let response = send_request(request).await?;
+
+    if *response.status() != 200 {
+        anyhow::bail!(
+            "Electric status request failed with status: {}",
+            response.status()
+        );
+    }
+
+    let status: ElectricStatusResponse = serde_json::from_slice(response.body())?;
+
+    // Cache the response
+    let json_data = serde_json::to_string(&status)?;
+    let _ = set_cached_vehicle_data(store, vin, "_status", &json_data).await;
+
+    Ok((status, false)) // false = fresh from API
 }
 
 async fn get_per_user_cached_token(
@@ -1540,13 +1664,29 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
 
     // Handle /location endpoint
     if path == "/location" {
+        // Check cache first
+        if let Ok(Some(cached_data)) = get_cached_vehicle_data(&store, &vin, "_location").await {
+            return Ok(add_cors_headers(Response::builder())
+                .status(200)
+                .header("content-type", "application/json")
+                .header("x-cache", "HIT")
+                .body(cached_data)
+                .build());
+        }
+
+        // Cache miss - fetch from API
         match fetch_vehicle_location(&toyota_token, &vin).await {
             Ok(location) => {
                 let json_response = serde_json::to_string(&location)
                     .map_err(|e| anyhow::anyhow!("Failed to serialize location: {}", e))?;
+
+                // Cache the response
+                let _ = set_cached_vehicle_data(&store, &vin, "_location", &json_response).await;
+
                 return Ok(add_cors_headers(Response::builder())
                     .status(200)
                     .header("content-type", "application/json")
+                    .header("x-cache", "MISS")
                     .body(json_response)
                     .build());
             }
@@ -1567,13 +1707,29 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
 
     // Handle /telemetry endpoint
     if path == "/telemetry" {
+        // Check cache first
+        if let Ok(Some(cached_data)) = get_cached_vehicle_data(&store, &vin, "_telemetry").await {
+            return Ok(add_cors_headers(Response::builder())
+                .status(200)
+                .header("content-type", "application/json")
+                .header("x-cache", "HIT")
+                .body(cached_data)
+                .build());
+        }
+
+        // Cache miss - fetch from API
         match fetch_vehicle_telemetry(&toyota_token, &vin).await {
             Ok(telemetry) => {
                 let json_response = serde_json::to_string(&telemetry)
                     .map_err(|e| anyhow::anyhow!("Failed to serialize telemetry: {}", e))?;
+
+                // Cache the response
+                let _ = set_cached_vehicle_data(&store, &vin, "_telemetry", &json_response).await;
+
                 return Ok(add_cors_headers(Response::builder())
                     .status(200)
                     .header("content-type", "application/json")
+                    .header("x-cache", "MISS")
                     .body(json_response)
                     .build());
             }
@@ -1594,36 +1750,9 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
 
     // Handle /abrp endpoint - ABRP-formatted telemetry
     if path == "/abrp" {
-        // Fetch electric status
-        let status_url = format!("{}/v1/global/remote/electric/status?vin={}", API_BASE, vin);
-        let request = Request::get(&status_url)
-            .header("content-type", "application/json")
-            .header("accept", "application/json")
-            .header(
-                "authorization",
-                format!("Bearer {}", toyota_token.access_token),
-            )
-            .header("datetime", get_timestamp_ms())
-            .header("x-correlationid", Uuid::new_v4().to_string())
-            .build();
-
-        let electric_status: ElectricStatusResponse = match send_request(request).await {
-            Ok(response) => {
-                if *response.status() != 200 {
-                    let error_json = serde_json::json!({
-                        "error": "Failed to fetch electric status",
-                        "status": *response.status(),
-                        "version": VERSION
-                    });
-                    return Ok(add_cors_headers(Response::builder())
-                        .status(500)
-                        .header("content-type", "application/json")
-                        .body(error_json.to_string())
-                        .build());
-                }
-                serde_json::from_slice(response.body())
-                    .map_err(|e| anyhow::anyhow!("Failed to parse electric status: {}", e))?
-            }
+        // Fetch electric status with caching
+        let (electric_status, from_cache) = match fetch_or_get_cached_electric_status(&store, &toyota_token, &vin).await {
+            Ok(result) => result,
             Err(e) => {
                 let error_json = serde_json::json!({
                     "error": "Failed to fetch electric status",
@@ -1680,27 +1809,16 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
         return Ok(add_cors_headers(Response::builder())
             .status(200)
             .header("content-type", "application/json")
+            .header("x-cache", if from_cache { "HIT" } else { "MISS" })
             .body(json_response)
             .build());
     }
 
     // Step 5: Get vehicle electric status (default endpoint)
     debug!(vin = vin, "Getting vehicle electric status...");
-    let status_url = format!("{}/v1/global/remote/electric/status?vin={}", API_BASE, vin);
 
-    let request = Request::get(&status_url)
-        .header("content-type", "application/json")
-        .header("accept", "application/json")
-        .header(
-            "authorization",
-            format!("Bearer {}", toyota_token.access_token),
-        )
-        .header("datetime", get_timestamp_ms())
-        .header("x-correlationid", Uuid::new_v4().to_string())
-        .build();
-
-    let response = match send_request(request).await {
-        Ok(r) => r,
+    let (electric_status, from_cache) = match fetch_or_get_cached_electric_status(&store, &toyota_token, &vin).await {
+        Ok(result) => result,
         Err(e) => {
             error!(error = %e, "Failed to get vehicle status");
             let error_json = serde_json::json!({
@@ -1715,28 +1833,6 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
                 .build());
         }
     };
-
-    if *response.status() != 200 {
-        let error_body = String::from_utf8_lossy(response.body());
-        error!(
-            status = %response.status(),
-            body = %error_body,
-            "Failed to get vehicle status"
-        );
-        let error_json = serde_json::json!({
-            "error": "Failed to get vehicle status",
-            "status": *response.status(),
-            "version": VERSION
-        });
-        return Ok(add_cors_headers(Response::builder())
-            .status(500)
-            .header("content-type", "application/json")
-            .body(error_json.to_string())
-            .build());
-    }
-
-    let electric_status: ElectricStatusResponse = serde_json::from_slice(response.body())
-        .map_err(|e| anyhow::anyhow!("Failed to parse vehicle status response: {}", e))?;
 
     let charge_info = &electric_status.payload.vehicle_info.charge_info;
 
@@ -1759,6 +1855,7 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
     Ok(add_cors_headers(Response::builder())
         .status(200)
         .header("content-type", "application/json")
+        .header("x-cache", if from_cache { "HIT" } else { "MISS" })
         .body(json_response)
         .build())
 }

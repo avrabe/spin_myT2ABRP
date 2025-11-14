@@ -60,6 +60,13 @@ This update adds critical production hardening features and complete observabili
   - Query parameter takes precedence over environment variable
   - Enables true multi-vehicle support without reconfiguration
 
+- **⚡ Vehicle Data Caching** (NEW):
+  - 5-minute TTL cache for all vehicle data endpoints
+  - Reduces Toyota API load and improves response times
+  - Per-VIN caching (supports multiple vehicles)
+  - X-Cache header indicates HIT/MISS status
+  - Automatic cache expiration and cleanup
+
 **See**: `IMPLEMENTATION_COMPLETE.md` for full details
 
 ### Previous Updates (v5.0) - JWT Bearer Token Authentication
@@ -449,6 +456,32 @@ For production deployments, consider:
 - Using JSON output format for log aggregation
 - Forwarding logs to centralized logging service
 - Monitoring ERROR-level logs for alerts
+
+### Caching Behavior (NEW in v5.1)
+
+All vehicle data endpoints (`/`, `/abrp`, `/location`, `/telemetry`) now implement intelligent caching:
+
+- **Cache Duration**: 5 minutes (300 seconds)
+- **Cache Key**: Per-VIN (multiple vehicles cached separately)
+- **Cache Header**: `X-Cache: HIT` (served from cache) or `X-Cache: MISS` (fresh from Toyota API)
+- **Performance**: Cached responses ~50-100ms, API responses ~1-4 seconds
+
+**Example:**
+```bash
+# First request - fetches from Toyota API
+curl http://localhost:3000/abrp?vin=VIN123 -H "Authorization: Bearer <token>"
+# Response includes: X-Cache: MISS
+
+# Second request within 5 minutes - served from cache
+curl http://localhost:3000/abrp?vin=VIN123 -H "Authorization: Bearer <token>"
+# Response includes: X-Cache: HIT
+```
+
+**Benefits:**
+- Reduces load on Toyota's API servers
+- Faster response times for repeated requests
+- Prevents rate limiting from Toyota
+- Supports multiple vehicles with independent caches
 
 ### Available Endpoints
 
