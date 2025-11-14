@@ -1113,6 +1113,51 @@ fn add_cors_headers(
     builder
 }
 
+/// Log response completion
+fn log_response(
+    response: &Response,
+    start_time: std::time::Instant,
+    method: spin_sdk::http::Method,
+    path: &str,
+    username: Option<&str>,
+) {
+    let duration = start_time.elapsed();
+    let duration_ms = duration.as_millis();
+
+    // Convert method to string
+    let method_str = format!("{:?}", method);
+
+    // Get cache status from headers if present
+    let mut cache_status = "-";
+    for (k, v) in response.headers() {
+        if k == "x-cache" {
+            cache_status = v.as_str().unwrap_or("-");
+            break;
+        }
+    }
+
+    if let Some(user) = username {
+        info!(
+            method = %method_str,
+            path = path,
+            status = %response.status(),
+            duration_ms = duration_ms,
+            cache = cache_status,
+            user = user,
+            "Request completed"
+        );
+    } else {
+        info!(
+            method = %method_str,
+            path = path,
+            status = %response.status(),
+            duration_ms = duration_ms,
+            cache = cache_status,
+            "Request completed"
+        );
+    }
+}
+
 async fn get_or_refresh_token_for_user(
     username: String,
     password: String,
@@ -1412,6 +1457,8 @@ async fn handle_logout(request: &IncomingRequest) -> Result<Response, anyhow::Er
 /// Send an HTTP request and return the response.
 #[http_component]
 async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, anyhow::Error> {
+    let start_time = std::time::Instant::now();
+
     // Validate production configuration on first request (static initialization)
     static INIT: std::sync::Once = std::sync::Once::new();
     INIT.call_once(|| {
@@ -1422,15 +1469,21 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
     let path = get_path_without_query(&full_uri);
     let method = request.method();
 
-    debug!("Request: {} {}", method, full_uri);
+    info!(
+        method = %method,
+        uri = %full_uri,
+        "Incoming request"
+    );
 
     // Handle OPTIONS requests for CORS preflight
     if method == spin_sdk::http::Method::Options {
         debug!("CORS preflight request");
-        return Ok(add_cors_headers(Response::builder())
+        let response = add_cors_headers(Response::builder())
             .status(200)
             .body("")
-            .build());
+            .build();
+        log_response(&response, start_time, method, path, None);
+        return Ok(response);
     }
 
     // Public endpoints (no authentication required)
@@ -1464,11 +1517,14 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
         let json_response = serde_json::to_string(&health)?;
         let status_code = if kv_status == "ok" { 200 } else { 503 };
 
-        return Ok(add_cors_headers(Response::builder())
+        let response = add_cors_headers(Response::builder())
             .status(status_code)
             .header("content-type", "application/json")
             .body(json_response)
-            .build());
+            .build();
+
+        log_response(&response, start_time, method, path, None);
+        return Ok(response);
     }
 
     // OpenAPI documentation endpoint
@@ -1480,30 +1536,36 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
                 String::from("{\"error\": \"Failed to generate OpenAPI spec\"}")
             });
 
-        return Ok(add_cors_headers(Response::builder())
+        let response = add_cors_headers(Response::builder())
             .status(200)
             .header("content-type", "application/json")
             .body(openapi_spec)
-            .build());
+            .build();
+
+        log_response(&response, start_time, method, path, None);
+        return Ok(response);
     }
 
     // Auth endpoints (handle login, refresh, logout)
     if path == "/auth/login" && method == spin_sdk::http::Method::Post {
-        return handle_login(request)
-            .await
-            .map(|r| add_cors_headers(r.into_builder()).build());
+        let response = handle_login(request).await?;
+        let final_response = add_cors_headers(response.into_builder()).build();
+        log_response(&final_response, start_time, method, path, None);
+        return Ok(final_response);
     }
 
     if path == "/auth/refresh" && method == spin_sdk::http::Method::Post {
-        return handle_refresh(request)
-            .await
-            .map(|r| add_cors_headers(r.into_builder()).build());
+        let response = handle_refresh(request).await?;
+        let final_response = add_cors_headers(response.into_builder()).build();
+        log_response(&final_response, start_time, method, path, None);
+        return Ok(final_response);
     }
 
     if path == "/auth/logout" && method == spin_sdk::http::Method::Post {
-        return handle_logout(&request)
-            .await
-            .map(|r| add_cors_headers(r.into_builder()).build());
+        let response = handle_logout(&request).await?;
+        let final_response = add_cors_headers(response.into_builder()).build();
+        log_response(&final_response, start_time, method, path, None);
+        return Ok(final_response);
     }
 
     // All other endpoints require Bearer token authentication
@@ -1537,11 +1599,13 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
                     "message": "Access token required (not refresh token)",
                     "version": VERSION
                 });
-                return Ok(add_cors_headers(Response::builder())
+                let response = add_cors_headers(Response::builder())
                     .status(401)
                     .header("content-type", "application/json")
                     .body(error_json.to_string())
-                    .build());
+                    .build();
+                log_response(&response, start_time, method, path, None);
+                return Ok(response);
             }
             c
         }
@@ -1551,13 +1615,18 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
                 "message": e.to_string(),
                 "version": VERSION
             });
-            return Ok(add_cors_headers(Response::builder())
+            let response = add_cors_headers(Response::builder())
                 .status(401)
                 .header("content-type", "application/json")
                 .body(error_json.to_string())
-                .build());
+                .build();
+            log_response(&response, start_time, method, path, None);
+            return Ok(response);
         }
     };
+
+    // Store username for logging
+    let username = &claims.sub;
 
     // Check if token is revoked
     if is_token_revoked(&store, &claims.jti).await {
@@ -1806,12 +1875,15 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
         let json_response = serde_json::to_string(&abrp_data)
             .map_err(|e| anyhow::anyhow!("Failed to serialize ABRP data: {}", e))?;
 
-        return Ok(add_cors_headers(Response::builder())
+        let response = add_cors_headers(Response::builder())
             .status(200)
             .header("content-type", "application/json")
             .header("x-cache", if from_cache { "HIT" } else { "MISS" })
             .body(json_response)
-            .build());
+            .build();
+
+        log_response(&response, start_time, method, path, Some(username));
+        return Ok(response);
     }
 
     // Step 5: Get vehicle electric status (default endpoint)
@@ -1852,12 +1924,16 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
 
     debug!("Vehicle status retrieved successfully");
 
-    Ok(add_cors_headers(Response::builder())
+    let response = add_cors_headers(Response::builder())
         .status(200)
         .header("content-type", "application/json")
         .header("x-cache", if from_cache { "HIT" } else { "MISS" })
         .body(json_response)
-        .build())
+        .build();
+
+    log_response(&response, start_time, method, path, Some(username));
+
+    Ok(response)
 }
 
 #[cfg(test)]
