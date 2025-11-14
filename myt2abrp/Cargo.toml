@@ -29,7 +29,11 @@ sha2 = "0.10"
 hmac = "0.12"
 # JWT token generation and validation
 jsonwebtoken = "9.3"
+# Structured logging with tracing
+tracing = "0.1"
+# OpenAPI documentation generation
+utoipa = { version = "5.3", features = ["uuid", "chrono"] }
 
-myt = { path = "../myt" }
+myt = { path = "../myt", features = ["openapi"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

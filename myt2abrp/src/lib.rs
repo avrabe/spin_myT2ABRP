@@ -13,6 +13,8 @@ use spin_sdk::http::{IncomingRequest, IntoResponse, Request, Response};
 use spin_sdk::key_value::Store;
 use spin_sdk::{http_component, variables};
 use std::time::{SystemTime, UNIX_EPOCH};
+use tracing::{debug, error, info, warn};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 const AUTH_URL: &str = "https://b2c-login.toyota-europe.com/json/realms/root/realms/tme/authenticate?authIndexType=service&authIndexValue=oneapp";
@@ -28,6 +30,10 @@ const REVOKED_TOKEN_KEY_PREFIX: &str = "revoked_";
 
 // Toyota OAuth Token Cache Settings
 const TOKEN_TTL_SECONDS: i64 = 3600; // 1 hour cache for Toyota OAuth tokens
+
+// Vehicle Data Cache Settings
+const VEHICLE_DATA_CACHE_KEY_PREFIX: &str = "vehicle_data_";
+const VEHICLE_DATA_TTL_SECONDS: i64 = 300; // 5 minutes cache for vehicle data
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -55,18 +61,25 @@ const RATE_LIMIT_LOGIN_LOCKOUT_SECONDS: i64 = 900; // 15 minutes lockout
 const MAX_USERNAME_LENGTH: usize = 256;
 const MAX_PASSWORD_LENGTH: usize = 256;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 struct CurrentStatus {
+    /// State of Charge (battery percentage)
     pub soc: i32,
+    /// Timestamp of data access
     pub access_date: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Charging status (CHARGING, NOT_CHARGING, etc.)
     pub charging_status: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Estimated EV range in km
     pub ev_range: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Estimated EV range with AC in km
     pub ev_range_with_ac: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Remaining charge time in minutes
     pub remaining_charge_time: Option<i32>,
+    /// API version
     pub version: String,
 }
 
@@ -91,60 +104,89 @@ impl CurrentStatus {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 struct HealthStatus {
+    /// Service health status
     pub status: String,
+    /// API version
     pub version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    /// KV store status
+    pub kv_store: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Uptime in seconds
+    pub uptime_seconds: Option<u64>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 struct AbrpTelemetry {
+    /// UTC timestamp
     pub utc: i64,
+    /// State of Charge (0-100)
     pub soc: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Latitude
     pub lat: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Longitude
     pub lon: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Is vehicle charging
     pub is_charging: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Is vehicle parked
     pub is_parked: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Odometer reading in km
     pub odometer: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Estimated battery range in km
     pub est_battery_range: Option<f64>,
+    /// API version
     pub version: String,
 }
 
 // JWT Token Claims
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 struct Claims {
-    pub sub: String,        // Subject (username/email)
-    pub exp: i64,           // Expiration time
-    pub iat: i64,           // Issued at
-    pub jti: String,        // JWT ID (unique identifier)
-    pub token_type: String, // "access" or "refresh"
+    /// Subject (username/email)
+    pub sub: String,
+    /// Expiration time (Unix timestamp)
+    pub exp: i64,
+    /// Issued at (Unix timestamp)
+    pub iat: i64,
+    /// JWT ID (unique identifier)
+    pub jti: String,
+    /// Token type: "access" or "refresh"
+    pub token_type: String,
 }
 
 // Login Request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 struct LoginRequest {
+    /// User email address
     pub username: String,
+    /// User password
     pub password: String,
 }
 
 // Login Response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 struct LoginResponse {
+    /// JWT access token
     pub access_token: String,
+    /// JWT refresh token
     pub refresh_token: String,
+    /// Token type (Bearer)
     pub token_type: String,
+    /// Access token expiry in seconds
     pub expires_in: i64,
 }
 
 // Refresh Token Request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 struct RefreshRequest {
+    /// JWT refresh token
     pub refresh_token: String,
 }
 
@@ -276,12 +318,10 @@ fn hash_username(username: &str) -> String {
 fn hash_username_with_key(username: &str, key: Option<&[u8]>) -> String {
     type HmacSha256 = Hmac<Sha256>;
 
-    // Use provided key, or try to get from environment, or use default
+    // Use provided key, or get from environment
     let hmac_key = match key {
         Some(k) => k.to_vec(),
-        None => variables::get("hmac_key")
-            .unwrap_or_else(|_| String::from_utf8_lossy(HMAC_KEY_DEFAULT).to_string())
-            .into_bytes(),
+        None => get_hmac_key(),
     };
 
     let mut mac = HmacSha256::new_from_slice(&hmac_key).expect("HMAC can take key of any size");
@@ -303,6 +343,64 @@ fn get_jwt_secret() -> Vec<u8> {
     variables::get("jwt_secret")
         .unwrap_or_else(|_| String::from_utf8_lossy(JWT_SECRET_DEFAULT).to_string())
         .into_bytes()
+}
+
+fn get_hmac_key() -> Vec<u8> {
+    variables::get("hmac_key")
+        .unwrap_or_else(|_| String::from_utf8_lossy(HMAC_KEY_DEFAULT).to_string())
+        .into_bytes()
+}
+
+fn get_cors_origin() -> String {
+    variables::get("cors_origin").unwrap_or_else(|_| "*".to_string())
+}
+
+/// Validate production configuration on startup
+/// CRITICAL: Panics if using default secrets in production
+fn validate_production_config() {
+    let jwt_secret = get_jwt_secret();
+    let hmac_key = get_hmac_key();
+
+    // Check if using default JWT secret
+    if jwt_secret == JWT_SECRET_DEFAULT {
+        error!("FATAL: Using default JWT_SECRET! Set SPIN_VARIABLE_JWT_SECRET environment variable.");
+        panic!("FATAL: JWT_SECRET not configured for production! This is a critical security vulnerability.");
+    }
+
+    // Check JWT secret length (must be at least 256 bits / 32 bytes)
+    if jwt_secret.len() < 32 {
+        error!(
+            "FATAL: JWT_SECRET too short ({} bytes). Must be at least 32 bytes (256 bits).",
+            jwt_secret.len()
+        );
+        panic!("FATAL: JWT_SECRET is too short! Minimum 32 bytes required.");
+    }
+
+    // Check if using default HMAC key
+    if hmac_key == HMAC_KEY_DEFAULT {
+        error!("FATAL: Using default HMAC_KEY! Set SPIN_VARIABLE_HMAC_KEY environment variable.");
+        panic!("FATAL: HMAC_KEY not configured for production! This is a critical security vulnerability.");
+    }
+
+    // Check HMAC key length
+    if hmac_key.len() < 32 {
+        error!(
+            "FATAL: HMAC_KEY too short ({} bytes). Must be at least 32 bytes (256 bits).",
+            hmac_key.len()
+        );
+        panic!("FATAL: HMAC_KEY is too short! Minimum 32 bytes required.");
+    }
+
+    // Log CORS configuration warning
+    let cors_origin = get_cors_origin();
+    if cors_origin == "*" {
+        warn!("WARNING: CORS is configured to allow all origins (*). This is insecure for production!");
+        warn!("Set SPIN_VARIABLE_CORS_ORIGIN to your application's domain.");
+    } else {
+        info!("CORS origin configured: {}", cors_origin);
+    }
+
+    info!("✓ Production configuration validated successfully");
 }
 
 fn generate_access_token(username: &str) -> anyhow::Result<String> {
@@ -816,8 +914,9 @@ fn parse_iso8601_to_timestamp(iso_string: &str) -> i64 {
 fn add_cors_headers(
     mut builder: spin_sdk::http::ResponseBuilder,
 ) -> spin_sdk::http::ResponseBuilder {
-    builder.header("access-control-allow-origin", "*");
-    builder.header("access-control-allow-methods", "GET, OPTIONS");
+    let cors_origin = get_cors_origin();
+    builder.header("access-control-allow-origin", cors_origin);
+    builder.header("access-control-allow-methods", "GET, POST, OPTIONS");
     builder.header(
         "access-control-allow-headers",
         "Content-Type, Authorization",
@@ -1124,11 +1223,20 @@ async fn handle_logout(request: &IncomingRequest) -> Result<Response, anyhow::Er
 /// Send an HTTP request and return the response.
 #[http_component]
 async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, anyhow::Error> {
+    // Validate production configuration on first request (static initialization)
+    static INIT: std::sync::Once = std::sync::Once::new();
+    INIT.call_once(|| {
+        validate_production_config();
+    });
+
     let path = request.uri();
     let method = request.method();
 
+    info!("Request: {} {}", method, path);
+
     // Handle OPTIONS requests for CORS preflight
     if method == spin_sdk::http::Method::Options {
+        debug!("CORS preflight request");
         return Ok(add_cors_headers(Response::builder())
             .status(200)
             .body("")
@@ -1137,13 +1245,37 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
 
     // Public endpoints (no authentication required)
     if path == "/health" {
-        let health = HealthStatus {
-            status: "healthy".to_string(),
-            version: VERSION.to_string(),
+        // Check KV store connectivity
+        let kv_status = match Store::open_default() {
+            Ok(store) => match store.exists("__health_check__") {
+                Ok(_) => "ok",
+                Err(e) => {
+                    warn!("KV store check failed: {}", e);
+                    "degraded"
+                }
+            },
+            Err(e) => {
+                error!("Cannot open KV store: {}", e);
+                "error"
+            }
         };
+
+        let health = HealthStatus {
+            status: if kv_status == "ok" {
+                "healthy".to_string()
+            } else {
+                "degraded".to_string()
+            },
+            version: VERSION.to_string(),
+            kv_store: Some(kv_status.to_string()),
+            uptime_seconds: None, // TODO: Track actual uptime
+        };
+
         let json_response = serde_json::to_string(&health)?;
+        let status_code = if kv_status == "ok" { 200 } else { 503 };
+
         return Ok(add_cors_headers(Response::builder())
-            .status(200)
+            .status(status_code)
             .header("content-type", "application/json")
             .body(json_response)
             .build());
