@@ -12,11 +12,55 @@ This application provides real-time vehicle battery status (State of Charge) fro
 
 ## Features
 
-### 🚀 Latest Updates (v5.0) - COMPLETE SECURITY OVERHAUL
+### 🚀 Latest Updates (v5.1) - PRODUCTION HARDENING & OBSERVABILITY
+
+**NEW: Production-Ready Deployment with Enhanced Security**
+
+This update adds critical production hardening features and complete observability:
+
+- **🔒 Startup Configuration Validation**:
+  - **Application PANICS** if JWT_SECRET or HMAC_KEY use default values
+  - Enforces minimum 256-bit (32 byte) secret length
+  - Prevents accidental insecure deployments
+  - Validates configuration on first HTTP request
+
+- **🌐 Configurable CORS Origins**:
+  - No longer hardcoded to wildcard `*`
+  - Set via `SPIN_VARIABLE_CORS_ORIGIN` environment variable
+  - Defaults to `*` with loud warnings for development
+  - **MUST** be set to specific domain in production
+
+- **📊 Structured Logging with Tracing**:
+  - All `println!` replaced with proper tracing calls
+  - Log levels: DEBUG (verbose), INFO (events), WARN (degraded), ERROR (critical)
+  - Machine-parseable, searchable, filterable output
+  - Ready for log aggregation (DataDog, Splunk, CloudWatch)
+
+- **📖 OpenAPI 3.0 Documentation**:
+  - New endpoint: `GET /api-doc/openapi.json`
+  - Auto-generated from code annotations
+  - All 7 schemas fully documented
+  - Integration-ready (Swagger UI, ReDoc, Postman)
+
+- **🏥 Enhanced Health Checks**:
+  - Actually tests KV store connectivity
+  - Returns 503 if degraded (not just 200)
+  - Includes `kv_store` status in response
+  - Production monitoring-ready
+
+- **🧪 Integration Test Framework**:
+  - Complete test structure with 7 categories
+  - Mock data for all Toyota API calls
+  - Test utilities for KV store, HTTP, time mocking
+  - Ready for implementation (see `tests/integration_tests.rs`)
+
+**See**: `IMPLEMENTATION_COMPLETE.md` for full details
+
+### Previous Updates (v5.0) - JWT Bearer Token Authentication
 
 **⚠️ BREAKING CHANGE: JWT Bearer Token Authentication**
 
-This release implements a **complete architectural redesign** from Basic Authentication to JWT Bearer tokens, following OAuth2 industry best practices for 2024/2025:
+This release implemented a **complete architectural redesign** from Basic Authentication to JWT Bearer tokens, following OAuth2 industry best practices for 2024/2025:
 
 - **🔐 JWT Bearer Tokens**: Industry-standard authentication with HS256 signing
   - **Access Tokens**: Short-lived (15 minutes) for API access
@@ -257,6 +301,20 @@ openssl rand -hex 32
 export SPIN_VARIABLE_HMAC_KEY=<your-random-key-here>
 ```
 
+**⚠️ CRITICAL: Set CORS Origin**
+
+The CORS origin controls which websites can access your API. You **MUST** set this to your specific domain in production:
+
+```bash
+# Set to your application's domain
+export SPIN_VARIABLE_CORS_ORIGIN=https://your-app.com
+
+# Or for multiple origins (comma-separated)
+export SPIN_VARIABLE_CORS_ORIGIN=https://app1.com,https://app2.com
+```
+
+**Default (INSECURE)**: If not set, defaults to `*` (allows ALL websites) with loud warnings in logs.
+
 #### Optional: Single-Vehicle VIN
 
 If you only have one vehicle, set the VIN (otherwise use `/vehicles` endpoint):
@@ -270,13 +328,15 @@ export SPIN_VARIABLE_VIN=YOUR_VEHICLE_VIN
 [variables]
 jwt_secret = { required = false, secret = true }
 hmac_key = { required = false, secret = true }
+cors_origin = { required = false }  # NEW in v5.1
 vin = { required = false }
 ```
 
 **Default Values (INSECURE - for development only):**
-- If `jwt_secret` not set: Uses hardcoded default (defined in code)
-- If `hmac_key` not set: Uses hardcoded default (defined in code)
-- **WARNING**: Never use default secrets in production!
+- If `jwt_secret` not set: Application **PANICS on startup** (NEW in v5.1)
+- If `hmac_key` not set: Application **PANICS on startup** (NEW in v5.1)
+- If `cors_origin` not set: Defaults to `*` with **WARNING** (should set in production)
+- **NOTE**: v5.1 enforces secure configuration - cannot deploy with defaults!
 
 ## Development
 
@@ -305,6 +365,65 @@ cargo test --lib --target x86_64-unknown-linux-gnu test_decode_jwt_uuid
 # Build for production
 cargo build --target wasm32-wasip1 --release
 ```
+
+### Logging Configuration (NEW in v5.1)
+
+The application now uses **structured logging** with the `tracing` crate, replacing all `println!` statements.
+
+#### Log Levels
+
+- **DEBUG**: Verbose internal operations (OAuth steps, cache operations)
+- **INFO**: Important events (token refresh, successful auth)
+- **WARN**: Degraded states (lockouts, token failures, insecure config)
+- **ERROR**: Critical failures (API errors, authentication failures)
+
+#### Setting Log Level
+
+```bash
+# Development - see all logs
+export RUST_LOG=debug
+spin up
+
+# Production - important events only
+export RUST_LOG=info
+spin up
+
+# Warnings and errors only
+export RUST_LOG=warn
+spin up
+```
+
+#### Example Log Output
+
+```
+DEBUG myt2abrp: OAuth Step 1: Starting authentication...
+DEBUG myt2abrp: OAuth Step 2: Submitting credentials...
+INFO myt2abrp: Token refreshed successfully
+WARN myt2abrp: User locked out identifier="user@example.com" lockout_seconds=900 failed_attempts=5
+ERROR myt2abrp: Failed to get vehicle status error="Connection timeout"
+```
+
+#### Structured Fields
+
+Logs include structured fields for filtering and analysis:
+```bash
+# Filter logs by specific user
+spin up 2>&1 | grep 'identifier="user@example.com"'
+
+# Show only rate limit events
+spin up 2>&1 | grep 'lockout_seconds'
+
+# Export to JSON for log aggregation tools (DataDog, Splunk, etc.)
+# Configure tracing subscriber with JSON formatter in production
+```
+
+#### Production Logging
+
+For production deployments, consider:
+- Setting `RUST_LOG=info` to reduce verbosity
+- Using JSON output format for log aggregation
+- Forwarding logs to centralized logging service
+- Monitoring ERROR-level logs for alerts
 
 ### Available Endpoints
 
@@ -412,28 +531,100 @@ curl http://127.0.0.1:3000/telemetry
 #### 6. Health Check
 **GET /health**
 
-Returns service health status for monitoring.
+Returns service health status for monitoring. **v5.1**: Now includes actual KV store connectivity testing.
 
 ```sh
 curl http://127.0.0.1:3000/health
 ```
 
-**Response:**
+**Response (Healthy):**
 ```json
 {
   "status": "healthy",
-  "version": "0.1.0"
+  "version": "0.1.0",
+  "kv_store": "ok"
 }
+```
+
+**Response (Degraded):**
+```json
+{
+  "status": "degraded",
+  "version": "0.1.0",
+  "kv_store": "error"
+}
+```
+
+**Status Codes:**
+- `200 OK`: All systems operational
+- `503 Service Unavailable`: Degraded state (KV store unreachable)
+
+#### 7. OpenAPI Documentation (NEW in v5.1)
+**GET /api-doc/openapi.json**
+
+Returns the complete OpenAPI 3.0 specification for the API. Auto-generated from code annotations, always up-to-date.
+
+```sh
+curl http://127.0.0.1:3000/api-doc/openapi.json
+```
+
+**Response:**
+```json
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Toyota MyT to ABRP Gateway API",
+    "version": "0.1.0",
+    "description": "WebAssembly-based gateway service...",
+    "license": {
+      "name": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local development"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "CurrentStatus": {...},
+      "HealthStatus": {...},
+      "AbrpTelemetry": {...},
+      "Claims": {...},
+      "LoginRequest": {...},
+      "LoginResponse": {...},
+      "RefreshRequest": {...}
+    }
+  }
+}
+```
+
+**Usage:**
+- **Swagger UI**: Import the JSON at https://editor.swagger.io
+- **Postman**: Import as OpenAPI 3.0 collection
+- **ReDoc**: Render beautiful documentation
+- **Code Generation**: Generate client SDKs with `openapi-generator`
+
+**Example - Generate TypeScript Client:**
+```bash
+curl http://localhost:3000/api-doc/openapi.json > openapi.json
+openapi-generator-cli generate -i openapi.json -g typescript-fetch -o ./client
 ```
 
 ### CORS Support
 
 All endpoints support CORS with the following headers:
-- `Access-Control-Allow-Origin: *`
-- `Access-Control-Allow-Methods: GET, OPTIONS`
-- `Access-Control-Allow-Headers: Content-Type`
+- `Access-Control-Allow-Origin`: **Configurable** (v5.1) - set via `SPIN_VARIABLE_CORS_ORIGIN`
+- `Access-Control-Allow-Methods`: `GET, POST, OPTIONS`
+- `Access-Control-Allow-Headers`: `Content-Type, Authorization`
 
-This enables direct integration from web applications.
+**⚠️ Important (v5.1):**
+- **Development**: Defaults to `*` (all origins) with warnings in logs
+- **Production**: **MUST** set `SPIN_VARIABLE_CORS_ORIGIN` to your domain
+- **Multiple Origins**: Comma-separated list supported (e.g., `https://app1.com,https://app2.com`)
+
+This enables secure integration from web applications while preventing unauthorized access in production.
 
 ## Using with A Better Route Planner (ABRP)
 
@@ -810,12 +1001,21 @@ spin up --log-dir ./logs
 
 ### Gateway Endpoints (This Service)
 
+**Authentication:**
+- **Login**: `POST /auth/login` - Authenticate and receive JWT tokens
+- **Refresh**: `POST /auth/refresh` - Renew access token
+- **Logout**: `POST /auth/logout` - Revoke tokens
+
+**Data Endpoints** (require Bearer token):
 - **Main Status**: `GET /` - Complete vehicle telemetry
 - **ABRP Integration**: `GET /abrp` - ABRP-formatted telemetry with location and odometer
 - **Vehicle List**: `GET /vehicles` - List all registered vehicles
 - **Location**: `GET /location` - GPS coordinates
 - **Telemetry**: `GET /telemetry` - Odometer and fuel data
-- **Health**: `GET /health` - Service health check
+
+**Public Endpoints** (no auth required):
+- **Health**: `GET /health` - Service health check (v5.1: includes KV store status)
+- **OpenAPI**: `GET /api-doc/openapi.json` - API specification (NEW in v5.1)
 
 ### Toyota Connected Services Europe (Upstream)
 
@@ -828,6 +1028,8 @@ spin up --log-dir ./logs
 - **Vehicles**: `https://ctpa-oneapi.tceu-ctp-prd.toyotaconnectedeurope.io/v1/vehicles`
 
 ## Testing Coverage
+
+### Unit Tests (20 tests)
 
 - ✅ JWT decoding with valid tokens
 - ✅ JWT decoding with invalid formats
@@ -845,7 +1047,31 @@ spin up --log-dir ./logs
 
 **Total: 20 tests** (9 in `myt` library, 11 in `myt2abrp` handler)
 
-Run tests with: `cargo test --lib --target x86_64-unknown-linux-gnu`
+### Integration Test Framework (NEW in v5.1)
+
+Complete test structure with 7 categories:
+- ✅ **Auth Flow Tests**: Config validation, JWT generation, username hashing
+- ✅ **Rate Limiting Tests**: Failed login lockout, per-user rate limits
+- ✅ **Token Caching Tests**: Per-user TTL, token refresh on expiry
+- ✅ **CORS Tests**: Header presence, OPTIONS preflight
+- ✅ **Health Check Tests**: Healthy/degraded KV store states
+- ✅ **OpenAPI Tests**: Spec endpoint, schema validation
+- ✅ **Integration Scenarios**: Complete auth flow, Toyota API failure handling, concurrent user isolation
+
+**Status**: Framework complete with mock data prepared. Tests marked `#[ignore]` pending refactoring for testability (see `tests/integration_tests.rs`).
+
+### Running Tests
+
+```bash
+# Run unit tests
+cargo test --lib --target x86_64-unknown-linux-gnu
+
+# Run integration tests (when implemented)
+cargo test --test integration_tests
+
+# Run all tests with verbose output
+cargo test --lib --target x86_64-unknown-linux-gnu -- --nocapture
+```
 
 ## Contributing
 
