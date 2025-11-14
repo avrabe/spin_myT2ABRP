@@ -949,6 +949,33 @@ fn parse_iso8601_to_timestamp(iso_string: &str) -> i64 {
     Utc::now().timestamp()
 }
 
+/// Extract the path component from a URI (without query string)
+fn get_path_without_query(uri: &str) -> &str {
+    uri.split('?').next().unwrap_or(uri)
+}
+
+/// Parse query parameters from a URI path
+/// Returns the value of the first occurrence of the parameter
+fn get_query_param(uri: &str, param_name: &str) -> Option<String> {
+    // Split on '?' to get query string
+    let parts: Vec<&str> = uri.split('?').collect();
+    if parts.len() < 2 {
+        return None;
+    }
+
+    // Parse query string
+    let query_string = parts[1];
+    for pair in query_string.split('&') {
+        let kv: Vec<&str> = pair.split('=').collect();
+        if kv.len() == 2 && kv[0] == param_name {
+            // URL decode the value
+            return urlencoding::decode(kv[1]).ok().map(|s| s.to_string());
+        }
+    }
+
+    None
+}
+
 fn add_cors_headers(
     mut builder: spin_sdk::http::ResponseBuilder,
 ) -> spin_sdk::http::ResponseBuilder {
@@ -1267,10 +1294,11 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
         validate_production_config();
     });
 
-    let path = request.uri();
+    let full_uri = request.uri();
+    let path = get_path_without_query(&full_uri);
     let method = request.method();
 
-    info!("Request: {} {}", method, path);
+    debug!("Request: {} {}", method, full_uri);
 
     // Handle OPTIONS requests for CORS preflight
     if method == spin_sdk::http::Method::Options {
@@ -1437,15 +1465,26 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
             .build());
     }
 
-    // Get VIN from environment variable
-    let vin = variables::get("vin").unwrap_or_default();
+    // Get VIN from query parameter, or fall back to environment variable
+    let vin_from_query = get_query_param(&full_uri, "vin");
+    let vin = vin_from_query
+        .clone()
+        .or_else(|| variables::get("vin").ok())
+        .unwrap_or_default();
+
+    if let Some(ref vin_param) = vin_from_query {
+        debug!("Using VIN from query parameter: {}", vin_param);
+    } else if !vin.is_empty() {
+        debug!("Using VIN from environment variable");
+    }
 
     if vin.is_empty() && path != "/vehicles" {
         let error_json = serde_json::json!({
             "error": "VIN required",
-            "message": "VIN must be configured via environment variable",
+            "message": "VIN must be provided via query parameter (?vin=XXX) or environment variable (SPIN_VARIABLE_VIN)",
             "version": VERSION
         });
+        debug!("VIN not provided for path: {}", path);
         return Ok(add_cors_headers(Response::builder())
             .status(400)
             .header("content-type", "application/json")

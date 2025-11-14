@@ -33,6 +33,8 @@ jsonwebtoken = "9.3"
 tracing = "0.1"
 # OpenAPI documentation generation
 utoipa = { version = "5.3", features = ["uuid", "chrono"] }
+# URL encoding/decoding for query parameters
+urlencoding = "2.1"
 
 myt = { path = "../myt", features = ["openapi"] }
 serde = { workspace = true }

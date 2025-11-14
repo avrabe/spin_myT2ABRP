@@ -54,6 +54,12 @@ This update adds critical production hardening features and complete observabili
   - Test utilities for KV store, HTTP, time mocking
   - Ready for implementation (see `tests/integration_tests.rs`)
 
+- **🚗 VIN Query Parameter Support** (NEW):
+  - Specify VIN via query parameter: `?vin=YOUR_VIN`
+  - Works with all data endpoints (/, /abrp, /location, /telemetry)
+  - Query parameter takes precedence over environment variable
+  - Enables true multi-vehicle support without reconfiguration
+
 **See**: `IMPLEMENTATION_COMPLETE.md` for full details
 
 ### Previous Updates (v5.0) - JWT Bearer Token Authentication
@@ -315,13 +321,32 @@ export SPIN_VARIABLE_CORS_ORIGIN=https://app1.com,https://app2.com
 
 **Default (INSECURE)**: If not set, defaults to `*` (allows ALL websites) with loud warnings in logs.
 
-#### Optional: Single-Vehicle VIN
+#### Optional: Vehicle Identification Number (VIN)
 
-If you only have one vehicle, set the VIN (otherwise use `/vehicles` endpoint):
+You can provide the VIN in two ways:
 
+**Option 1: Query Parameter** (Recommended for multi-vehicle scenarios)
 ```bash
-export SPIN_VARIABLE_VIN=YOUR_VEHICLE_VIN
+# Access vehicle data with VIN as query parameter
+curl http://127.0.0.1:3000/abrp?vin=YOUR_VEHICLE_VIN \
+  -H "Authorization: Bearer <token>"
+
+# Works with all data endpoints
+curl http://127.0.0.1:3000/?vin=YOUR_VEHICLE_VIN \
+  -H "Authorization: Bearer <token>"
 ```
+
+**Option 2: Environment Variable** (For single-vehicle deployments)
+```bash
+# Set as environment variable
+export SPIN_VARIABLE_VIN=YOUR_VEHICLE_VIN
+
+# No need to provide VIN in each request
+curl http://127.0.0.1:3000/abrp \
+  -H "Authorization: Bearer <token>"
+```
+
+**Priority**: Query parameter takes precedence over environment variable. This allows overriding the default VIN for multi-vehicle access.
 
 **Security Configuration in spin.toml:**
 ```toml
@@ -428,12 +453,18 @@ For production deployments, consider:
 ### Available Endpoints
 
 #### 1. Main Endpoint - Vehicle Status
-**GET /**
+**GET /** or **GET /?vin=YOUR_VIN**
 
 Returns comprehensive vehicle telemetry including battery status, charging state, and range.
 
 ```sh
-curl http://127.0.0.1:3000/
+# Using environment variable VIN
+curl http://127.0.0.1:3000/ \
+  -H "Authorization: Bearer <token>"
+
+# Using query parameter VIN (overrides environment variable)
+curl http://127.0.0.1:3000/?vin=YOUR_VEHICLE_VIN \
+  -H "Authorization: Bearer <token>"
 ```
 
 **Response:**
@@ -450,12 +481,18 @@ curl http://127.0.0.1:3000/
 ```
 
 #### 2. ABRP Integration Endpoint
-**GET /abrp**
+**GET /abrp** or **GET /abrp?vin=YOUR_VIN**
 
 Returns telemetry data formatted for A Better Route Planner integration. Includes location, odometer, and charging status.
 
 ```sh
-curl http://127.0.0.1:3000/abrp
+# Using environment variable VIN
+curl http://127.0.0.1:3000/abrp \
+  -H "Authorization: Bearer <token>"
+
+# Using query parameter VIN (recommended for multi-vehicle)
+curl http://127.0.0.1:3000/abrp?vin=YOUR_VEHICLE_VIN \
+  -H "Authorization: Bearer <token>"
 ```
 
 **Response:**
@@ -632,8 +669,11 @@ This service provides a dedicated `/abrp` endpoint for seamless integration with
 
 1. **Set up your gateway**: Deploy this service and note your public URL
 2. **Configure ABRP**: In ABRP settings, configure generic telemetry API
-3. **Endpoint**: Point to `https://your-gateway.example.com/abrp`
-4. **Polling**: ABRP will automatically poll for updates
+3. **Endpoint**:
+   - Single vehicle: `https://your-gateway.example.com/abrp`
+   - Multi-vehicle: `https://your-gateway.example.com/abrp?vin=YOUR_VIN`
+4. **Authentication**: Configure Bearer token in ABRP settings (use access token)
+5. **Polling**: ABRP will automatically poll for updates
 
 The `/abrp` endpoint provides:
 - **State of Charge (SoC)**: Battery percentage
