@@ -35,6 +35,8 @@ This update adds critical production hardening features and complete observabili
   - Log levels: DEBUG (verbose), INFO (events), WARN (degraded), ERROR (critical)
   - Machine-parseable, searchable, filterable output
   - Ready for log aggregation (DataDog, Splunk, CloudWatch)
+  - **Request/Response Logging**: Every request logged with method, path, status, timing, cache status, and user
+  - **Performance Tracking**: Request duration in milliseconds for monitoring
 
 - **📖 OpenAPI 3.0 Documentation**:
   - New endpoint: `GET /api-doc/openapi.json`
@@ -428,9 +430,19 @@ spin up
 #### Example Log Output
 
 ```
+# Request logging
+INFO myt2abrp: Incoming request method=Post uri="/auth/login"
+
+# OAuth operations
 DEBUG myt2abrp: OAuth Step 1: Starting authentication...
 DEBUG myt2abrp: OAuth Step 2: Submitting credentials...
 INFO myt2abrp: Token refreshed successfully
+
+# Request completion with timing
+INFO myt2abrp: Request completed method=Get path="/abrp" status=200 duration_ms=1523 cache=HIT user="user@example.com"
+INFO myt2abrp: Request completed method=Get path="/health" status=200 duration_ms=12 cache="-"
+
+# Security events
 WARN myt2abrp: User locked out identifier="user@example.com" lockout_seconds=900 failed_attempts=5
 ERROR myt2abrp: Failed to get vehicle status error="Connection timeout"
 ```
