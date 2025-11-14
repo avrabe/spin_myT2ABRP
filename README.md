@@ -50,6 +50,15 @@ This update adds critical production hardening features and complete observabili
   - Includes `kv_store` status in response
   - Production monitoring-ready
 
+- **📊 Prometheus Metrics Endpoint** (NEW):
+  - New endpoint: `GET /metrics` - Prometheus-compatible metrics
+  - Request counters (total and per-endpoint)
+  - Error rates (total and per-endpoint)
+  - Cache statistics (hits, misses, hit rate percentage)
+  - Authentication metrics (login attempts, failures, active sessions)
+  - Rate limiting metrics (rate limit hits)
+  - Ready for Grafana dashboards and alerting
+
 - **🧪 Integration Test Framework**:
   - Complete test structure with 7 categories
   - Mock data for all Toyota API calls
@@ -694,6 +703,89 @@ curl http://localhost:3000/api-doc/openapi.json > openapi.json
 openapi-generator-cli generate -i openapi.json -g typescript-fetch -o ./client
 ```
 
+#### 8. Prometheus Metrics (NEW in v5.1)
+**GET /metrics**
+
+Returns Prometheus-compatible metrics in text format for monitoring and alerting. Tracks requests, errors, cache performance, authentication, and rate limiting.
+
+```sh
+curl http://127.0.0.1:3000/metrics
+```
+
+**Response Sample:**
+```text
+# HELP myt2abrp_requests_total Total number of HTTP requests
+# TYPE myt2abrp_requests_total counter
+myt2abrp_requests_total 1523
+
+# HELP myt2abrp_errors_total Total number of errors
+# TYPE myt2abrp_errors_total counter
+myt2abrp_errors_total 12
+
+# HELP myt2abrp_endpoint_requests_total Requests per endpoint
+# TYPE myt2abrp_endpoint_requests_total counter
+myt2abrp_endpoint_requests_total{endpoint="/abrp"} 856
+myt2abrp_endpoint_requests_total{endpoint="/health"} 245
+myt2abrp_endpoint_requests_total{endpoint="/auth/login"} 23
+
+# HELP myt2abrp_cache_hits_total Cache hits
+# TYPE myt2abrp_cache_hits_total counter
+myt2abrp_cache_hits_total 687
+
+# HELP myt2abrp_cache_misses_total Cache misses
+# TYPE myt2abrp_cache_misses_total counter
+myt2abrp_cache_misses_total 169
+
+# HELP myt2abrp_cache_hit_rate_percent Cache hit rate percentage
+# TYPE myt2abrp_cache_hit_rate_percent gauge
+myt2abrp_cache_hit_rate_percent 80.26
+
+# HELP myt2abrp_login_attempts_total Total login attempts
+# TYPE myt2abrp_login_attempts_total counter
+myt2abrp_login_attempts_total 23
+
+# HELP myt2abrp_login_failures_total Failed login attempts
+# TYPE myt2abrp_login_failures_total counter
+myt2abrp_login_failures_total 2
+
+# HELP myt2abrp_active_sessions Currently active sessions
+# TYPE myt2abrp_active_sessions gauge
+myt2abrp_active_sessions 5
+
+# HELP myt2abrp_rate_limit_hits_total Requests rejected by rate limiting
+# TYPE myt2abrp_rate_limit_hits_total counter
+myt2abrp_rate_limit_hits_total 8
+
+# HELP myt2abrp_error_rate_percent Overall error rate percentage
+# TYPE myt2abrp_error_rate_percent gauge
+myt2abrp_error_rate_percent 0.79
+```
+
+**Metrics Collected:**
+- **Request Counters**: Total requests and per-endpoint breakdown
+- **Error Tracking**: Total errors and per-endpoint error rates
+- **Cache Performance**: Hit/miss counts and hit rate percentage
+- **Authentication**: Login attempts, failures, and active sessions
+- **Rate Limiting**: Number of requests rejected by rate limiter
+- **Calculated Metrics**: Error rate and cache hit rate percentages
+
+**Integration with Prometheus:**
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: 'myt2abrp-gateway'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['your-gateway.example.com:3000']
+    metrics_path: '/metrics'
+```
+
+**Grafana Dashboard Examples:**
+- Request rate: `rate(myt2abrp_requests_total[5m])`
+- Error rate: `rate(myt2abrp_errors_total[5m]) / rate(myt2abrp_requests_total[5m]) * 100`
+- Cache hit rate: `myt2abrp_cache_hit_rate_percent`
+- Active sessions: `myt2abrp_active_sessions`
+
 ### CORS Support
 
 All endpoints support CORS with the following headers:
@@ -1101,6 +1193,7 @@ spin up --log-dir ./logs
 **Public Endpoints** (no auth required):
 - **Health**: `GET /health` - Service health check (v5.1: includes KV store status)
 - **OpenAPI**: `GET /api-doc/openapi.json` - API specification (NEW in v5.1)
+- **Metrics**: `GET /metrics` - Prometheus-compatible metrics (NEW in v5.1)
 
 ### Toyota Connected Services Europe (Upstream)
 
