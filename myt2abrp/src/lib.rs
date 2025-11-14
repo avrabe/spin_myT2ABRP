@@ -14,8 +14,44 @@ use spin_sdk::key_value::Store;
 use spin_sdk::{http_component, variables};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{debug, error, info, warn};
-use utoipa::ToSchema;
+use utoipa::{OpenApi, ToSchema};
 use uuid::Uuid;
+
+// OpenAPI Documentation
+#[derive(OpenApi)]
+#[openapi(
+    info(
+        title = "Toyota MyT to ABRP Gateway API",
+        version = "0.1.0",
+        description = "WebAssembly-based gateway service that bridges Toyota Connected Services Europe (MyToyota) with A Better Route Planner (ABRP) for electric vehicle telemetry data.",
+        contact(
+            name = "Ralf Anton Beier",
+            email = "ralf_beier@me.com"
+        ),
+        license(name = "MIT")
+    ),
+    servers(
+        (url = "http://localhost:3000", description = "Local development"),
+        (url = "https://your-gateway.example.com", description = "Production")
+    ),
+    components(
+        schemas(
+            CurrentStatus,
+            HealthStatus,
+            AbrpTelemetry,
+            Claims,
+            LoginRequest,
+            LoginResponse,
+            RefreshRequest
+        )
+    ),
+    tags(
+        (name = "Authentication", description = "JWT token authentication endpoints"),
+        (name = "Vehicle Data", description = "Vehicle telemetry and status endpoints"),
+        (name = "Health", description = "Service health monitoring")
+    )
+)]
+struct ApiDoc;
 
 const AUTH_URL: &str = "https://b2c-login.toyota-europe.com/json/realms/root/realms/tme/authenticate?authIndexType=service&authIndexValue=oneapp";
 const AUTHORIZE_URL: &str = "https://b2c-login.toyota-europe.com/oauth2/realms/root/realms/tme/authorize?client_id=oneapp&scope=openid+profile+write&response_type=code&redirect_uri=com.toyota.oneapp:/oauth2Callback&code_challenge=plain&code_challenge_method=plain";
@@ -1280,6 +1316,22 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
             .status(status_code)
             .header("content-type", "application/json")
             .body(json_response)
+            .build());
+    }
+
+    // OpenAPI documentation endpoint
+    if path == "/api-doc/openapi.json" {
+        debug!("Serving OpenAPI specification");
+        let openapi_spec = ApiDoc::openapi().to_pretty_json()
+            .unwrap_or_else(|e| {
+                error!(error = %e, "Failed to serialize OpenAPI spec");
+                String::from("{\"error\": \"Failed to generate OpenAPI spec\"}")
+            });
+
+        return Ok(add_cors_headers(Response::builder())
+            .status(200)
+            .header("content-type", "application/json")
+            .body(openapi_spec)
             .build());
     }
 
