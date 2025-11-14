@@ -569,9 +569,11 @@ async fn record_failed_login(store: &Store, identifier: &str) -> anyhow::Result<
     // Trigger lockout after threshold
     if rate_info.count >= RATE_LIMIT_LOGIN_ATTEMPTS {
         rate_info.lockout_until = Some(now + RATE_LIMIT_LOGIN_LOCKOUT_SECONDS);
-        println!(
-            "User {} locked out for {} seconds after {} failed attempts",
-            identifier, RATE_LIMIT_LOGIN_LOCKOUT_SECONDS, rate_info.count
+        warn!(
+            identifier = identifier,
+            lockout_seconds = RATE_LIMIT_LOGIN_LOCKOUT_SECONDS,
+            failed_attempts = rate_info.count,
+            "User locked out after failed login attempts"
         );
     }
 
@@ -682,12 +684,12 @@ async fn cleanup_expired_user_token(store: &Store, username_hash: &str) -> anyho
     store
         .delete(&cache_key)
         .map_err(|e| anyhow::anyhow!("Failed to delete expired token from cache: {}", e))?;
-    println!("Cleaned up expired token for user");
+    debug!(username_hash = username_hash, "Cleaned up expired token for user");
     Ok(())
 }
 
 async fn refresh_access_token(refresh_token: String) -> anyhow::Result<(TokenResponse, String)> {
-    println!("Refreshing access token...");
+    info!("Refreshing access token...");
 
     let refresh_request = RefreshTokenRequest::new(refresh_token.clone());
     let token_body = format!(
@@ -715,7 +717,7 @@ async fn refresh_access_token(refresh_token: String) -> anyhow::Result<(TokenRes
 
     let uuid = decode_jwt_uuid(&token_response.id_token)?;
 
-    println!("Token refreshed successfully");
+    info!("Token refreshed successfully");
     Ok((token_response, uuid))
 }
 
@@ -723,10 +725,10 @@ async fn perform_full_oauth_flow(
     username: String,
     password: String,
 ) -> anyhow::Result<(TokenResponse, String)> {
-    println!("Performing full OAuth2 authentication flow...");
+    debug!("Performing full OAuth2 authentication flow...");
 
     // Step 1: Initial authentication request
-    println!("Step 1: Starting authentication...");
+    debug!("OAuth Step 1: Starting authentication...");
     let auth_request = AuthenticateRequest::new();
     let request = Request::post(AUTH_URL, auth_request)
         .header("content-type", "application/json")
@@ -738,7 +740,7 @@ async fn perform_full_oauth_flow(
         .map_err(|e| anyhow::anyhow!("Failed to parse initial auth response: {}", e))?;
 
     // Step 2: Submit credentials
-    println!("Step 2: Submitting credentials...");
+    debug!("OAuth Step 2: Submitting credentials...");
     let auth_request_with_creds =
         AuthenticateRequest::with_credentials(username, password, auth_response.auth_id);
     let request = Request::post(AUTH_URL, auth_request_with_creds)
@@ -763,10 +765,10 @@ async fn perform_full_oauth_flow(
         .token_id
         .ok_or_else(|| anyhow::anyhow!("No tokenId received after authentication"))?;
 
-    println!("Authentication successful, got tokenId");
+    debug!("OAuth: Authentication successful, got tokenId");
 
     // Step 3: Get authorization code
-    println!("Step 3: Getting authorization code...");
+    debug!("OAuth Step 3: Getting authorization code...");
     let cookie = format!("iPlanetDirectoryPro={}", token_id);
     let request = Request::get(AUTHORIZE_URL).header("cookie", cookie).build();
 
@@ -787,10 +789,10 @@ async fn perform_full_oauth_flow(
         .ok_or_else(|| anyhow::anyhow!("No code parameter found in redirect URL"))?
         .to_string();
 
-    println!("Got authorization code");
+    debug!("OAuth: Got authorization code");
 
     // Step 4: Exchange code for tokens
-    println!("Step 4: Exchanging code for access token...");
+    debug!("OAuth Step 4: Exchanging code for access token...");
     let token_request = TokenRequest::new(code);
     let token_body = format!(
         "client_id={}&code={}&redirect_uri={}&grant_type={}&code_verifier={}",
@@ -818,11 +820,11 @@ async fn perform_full_oauth_flow(
     let token_response: TokenResponse = serde_json::from_slice(response.body())
         .map_err(|e| anyhow::anyhow!("Failed to parse token exchange response: {}", e))?;
 
-    println!("Got access token");
+    debug!("OAuth: Got access token");
 
     // Decode UUID from JWT
     let uuid = decode_jwt_uuid(&token_response.id_token)?;
-    println!("Decoded UUID: {}", uuid);
+    debug!(uuid = %uuid, "OAuth: Decoded UUID from JWT");
 
     Ok((token_response, uuid))
 }
@@ -831,7 +833,7 @@ async fn fetch_vehicle_location(
     token: &CachedToken,
     vin: &str,
 ) -> anyhow::Result<LocationResponse> {
-    println!("Fetching vehicle location...");
+    debug!(vin = vin, "Fetching vehicle location...");
     let url = format!("{}/v1/global/remote/location?vin={}", API_BASE, vin);
 
     let request = Request::get(&url)
@@ -855,7 +857,7 @@ async fn fetch_vehicle_telemetry(
     token: &CachedToken,
     vin: &str,
 ) -> anyhow::Result<TelemetryResponse> {
-    println!("Fetching vehicle telemetry...");
+    debug!(vin = vin, "Fetching vehicle telemetry...");
     let url = format!("{}/v1/global/remote/telemetry?vin={}", API_BASE, vin);
 
     let request = Request::get(&url)
@@ -879,7 +881,7 @@ async fn fetch_vehicle_telemetry(
 }
 
 async fn fetch_vehicle_list(token: &CachedToken) -> anyhow::Result<VehicleListResponse> {
-    println!("Fetching vehicle list...");
+    debug!("Fetching vehicle list...");
     let url = format!("{}/v1/vehicles", API_BASE);
 
     let request = Request::get(&url)
@@ -938,17 +940,17 @@ async fn get_or_refresh_token_for_user(
     if let Some(mut per_user_token) = get_per_user_cached_token(&store, &username_hash).await? {
         // Check if TTL expired (1 hour since last access) - BEFORE updating access time
         if per_user_token.is_ttl_expired(current_time) {
-            println!(
-                "Per-user token TTL expired (inactive for {} seconds), cleaning up...",
-                current_time - per_user_token.last_accessed
+            debug!(
+                inactive_seconds = current_time - per_user_token.last_accessed,
+                "Per-user token TTL expired, cleaning up"
             );
             cleanup_expired_user_token(&store, &username_hash).await?;
         } else if !per_user_token.token.is_expired(current_time) {
             // Token is still valid, update access time and save
-            println!(
-                "Using cached token for user (expires in {} seconds, last accessed {} seconds ago)",
-                per_user_token.token.expires_at - current_time,
-                current_time - per_user_token.last_accessed
+            debug!(
+                expires_in = per_user_token.token.expires_at - current_time,
+                last_accessed_ago = current_time - per_user_token.last_accessed,
+                "Using cached token for user"
             );
 
             // Update and save access time
@@ -956,7 +958,7 @@ async fn get_or_refresh_token_for_user(
             save_per_user_token_to_cache(&store, &username_hash, &per_user_token).await?;
             return Ok(per_user_token.token);
         } else {
-            println!("Cached token expired, attempting refresh...");
+            info!("Cached token expired, attempting refresh...");
 
             // Try to refresh the token
             match refresh_access_token(per_user_token.token.refresh_token.clone()).await {
@@ -973,16 +975,16 @@ async fn get_or_refresh_token_for_user(
                     return Ok(new_cached_token);
                 }
                 Err(e) => {
-                    println!(
-                        "Token refresh failed: {}. Performing full authentication...",
-                        e
+                    warn!(
+                        error = %e,
+                        "Token refresh failed, performing full authentication"
                     );
                     cleanup_expired_user_token(&store, &username_hash).await?;
                 }
             }
         }
     } else {
-        println!("No cached token found for user");
+        debug!("No cached token found for user");
     }
 
     // Perform full OAuth flow
@@ -1592,7 +1594,7 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
     }
 
     // Step 5: Get vehicle electric status (default endpoint)
-    println!("Getting vehicle electric status...");
+    debug!(vin = vin, "Getting vehicle electric status...");
     let status_url = format!("{}/v1/global/remote/electric/status?vin={}", API_BASE, vin);
 
     let request = Request::get(&status_url)
@@ -1609,7 +1611,7 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
     let response = match send_request(request).await {
         Ok(r) => r,
         Err(e) => {
-            println!("Failed to get vehicle status: {}", e);
+            error!(error = %e, "Failed to get vehicle status");
             let error_json = serde_json::json!({
                 "error": "Failed to get vehicle status",
                 "message": e.to_string(),
@@ -1625,10 +1627,10 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
 
     if *response.status() != 200 {
         let error_body = String::from_utf8_lossy(response.body());
-        println!(
-            "Failed to get vehicle status. Status: {}. Body: {}",
-            response.status(),
-            error_body
+        error!(
+            status = %response.status(),
+            body = %error_body,
+            "Failed to get vehicle status"
         );
         let error_json = serde_json::json!({
             "error": "Failed to get vehicle status",
@@ -1661,7 +1663,7 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
     let json_response = serde_json::to_string(&return_value)
         .map_err(|e| anyhow::anyhow!("Failed to serialize response: {}", e))?;
 
-    println!("Success: {}", json_response);
+    debug!("Vehicle status retrieved successfully");
 
     Ok(add_cors_headers(Response::builder())
         .status(200)
