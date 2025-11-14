@@ -17,6 +17,10 @@ use tracing::{debug, error, info, warn};
 use utoipa::{OpenApi, ToSchema};
 use uuid::Uuid;
 
+// Metrics module for Prometheus-compatible monitoring
+mod metrics;
+use metrics::METRICS;
+
 // OpenAPI Documentation
 #[derive(OpenApi)]
 #[openapi(
@@ -719,15 +723,18 @@ async fn get_cached_vehicle_data(
                 debug!("Cache expired for VIN {} data_type {}", vin, data_type);
                 // Delete expired cache
                 let _ = store.delete(&key);
+                METRICS.record_cache_miss();
                 Ok(None)
             } else {
                 debug!("Cache hit for VIN {} data_type {} (age: {} seconds)",
                        vin, data_type, now - cached.cached_at);
+                METRICS.record_cache_hit();
                 Ok(Some(cached.data))
             }
         }
         _ => {
             debug!("Cache miss for VIN {} data_type {}", vin, data_type);
+            METRICS.record_cache_miss();
             Ok(None)
         }
     }
@@ -1136,6 +1143,12 @@ fn log_response(
         }
     }
 
+    // Record error metrics for 4xx and 5xx responses
+    let status_code = response.status();
+    if *status_code >= 400 {
+        METRICS.record_error(path);
+    }
+
     if let Some(user) = username {
         info!(
             method = %method_str,
@@ -1260,6 +1273,8 @@ async fn handle_login(request: IncomingRequest) -> Result<Response, anyhow::Erro
     // Check rate limit for this username
     let rate_limit_key = format!("login_{}", hash_username(&login_req.username));
     if !check_rate_limit(&store, &rate_limit_key, RATE_LIMIT_PER_USER_HOUR, 3600).await? {
+        METRICS.record_rate_limit_hit();
+        METRICS.record_login_failure();
         record_failed_login(&store, &login_req.username).await?;
         return Ok(Response::builder()
             .status(429)
@@ -1274,6 +1289,9 @@ async fn handle_login(request: IncomingRequest) -> Result<Response, anyhow::Erro
     // Authenticate with Toyota
     match get_or_refresh_token_for_user(login_req.username.clone(), login_req.password).await {
         Ok(_toyota_token) => {
+            // Record successful login attempt
+            METRICS.record_login_attempt();
+
             // Generate JWT tokens
             let access_token = generate_access_token(&login_req.username)?;
             let refresh_token = generate_refresh_token(&login_req.username)?;
@@ -1290,6 +1308,9 @@ async fn handle_login(request: IncomingRequest) -> Result<Response, anyhow::Erro
                 user_agent,
             )
             .await?;
+
+            // Increment active sessions
+            METRICS.increment_active_sessions();
 
             // Clear failed login attempts
             clear_failed_logins(&store, &login_req.username).await?;
@@ -1308,7 +1329,9 @@ async fn handle_login(request: IncomingRequest) -> Result<Response, anyhow::Erro
                 .build())
         }
         Err(_e) => {
-            // Record failed login
+            // Record failed login attempt
+            METRICS.record_login_attempt();
+            METRICS.record_login_failure();
             record_failed_login(&store, &login_req.username).await?;
 
             Ok(Response::builder()
@@ -1439,6 +1462,9 @@ async fn handle_logout(request: &IncomingRequest) -> Result<Response, anyhow::Er
     // Revoke the token
     revoke_token(&store, &claims.jti, claims.exp).await?;
 
+    // Decrement active sessions
+    METRICS.decrement_active_sessions();
+
     // Could also delete all sessions for this user
     // For now, just revoke the token
 
@@ -1474,6 +1500,9 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
         uri = %full_uri,
         "Incoming request"
     );
+
+    // Record request metrics
+    METRICS.record_request(path);
 
     // Handle OPTIONS requests for CORS preflight
     if method == spin_sdk::http::Method::Options {
@@ -1540,6 +1569,21 @@ async fn handle_request(request: IncomingRequest) -> Result<impl IntoResponse, a
             .status(200)
             .header("content-type", "application/json")
             .body(openapi_spec)
+            .build();
+
+        log_response(&response, start_time, method, path, None);
+        return Ok(response);
+    }
+
+    // Prometheus metrics endpoint
+    if path == "/metrics" {
+        debug!("Serving Prometheus metrics");
+        let metrics_output = METRICS.to_prometheus_format();
+
+        let response = add_cors_headers(Response::builder())
+            .status(200)
+            .header("content-type", "text/plain; version=0.0.4; charset=utf-8")
+            .body(metrics_output)
             .build();
 
         log_response(&response, start_time, method, path, None);
