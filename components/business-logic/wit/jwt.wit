@@ -1,0 +1,38 @@
+package toyota:business-logic@0.1.0;
+
+/// JWT token operations - completely Spin-independent
+interface jwt {
+    /// JWT token claims
+    record claims {
+        /// Subject (username)
+        sub: string,
+        /// Expiration time (Unix timestamp)
+        exp: s64,
+        /// Issued at time (Unix timestamp)
+        iat: s64,
+        /// JWT ID (unique identifier)
+        jti: string,
+        /// Token type (access or refresh)
+        token-type: string,
+    }
+
+    /// Generate an access token for a user
+    /// Returns: JWT token string or error message
+    generate-access-token: func(username: string, jwt-secret: list<u8>) -> result<string, string>;
+
+    /// Generate a refresh token for a user
+    /// Returns: JWT token string or error message
+    generate-refresh-token: func(username: string, jwt-secret: list<u8>) -> result<string, string>;
+
+    /// Verify and decode a JWT token
+    /// Returns: Decoded claims or error message
+    verify-token: func(token: string, jwt-secret: list<u8>) -> result<claims, string>;
+
+    /// Hash a username using HMAC-SHA256
+    /// Returns: Hex-encoded hash
+    hash-username: func(username: string, hmac-key: list<u8>) -> string;
+}
+
+world business-logic {
+    export jwt;
+}
