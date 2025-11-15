@@ -1,0 +1,73 @@
+package toyota:retry@0.1.0;
+
+/// Retry strategy utilities for exponential backoff and retry decisions
+///
+/// This component provides pure retry logic including exponential backoff
+/// calculation and retry decision making. Zero dependencies on Spin SDK
+/// or any platform-specific APIs.
+interface strategy {
+    /// Retry configuration for exponential backoff
+    record retry-config {
+        /// Maximum number of retry attempts
+        max-attempts: u32,
+        /// Initial delay in milliseconds
+        initial-delay-ms: u64,
+        /// Maximum delay in milliseconds (cap for exponential growth)
+        max-delay-ms: u64,
+        /// Multiplier for exponential backoff (typically 2.0)
+        multiplier: f64,
+    }
+
+    /// Get default retry configuration
+    ///
+    /// Returns:
+    /// - max-attempts: 3
+    /// - initial-delay-ms: 100
+    /// - max-delay-ms: 10000
+    /// - multiplier: 2.0
+    get-default-config: func() -> retry-config;
+
+    /// Calculate exponential backoff delay for a given attempt
+    ///
+    /// Formula: min(initial_delay * multiplier^(attempt-1), max_delay)
+    ///
+    /// Example: With default config (initial=100ms, multiplier=2.0, max=10s):
+    /// - Attempt 1: 100ms
+    /// - Attempt 2: 200ms
+    /// - Attempt 3: 400ms
+    /// - Attempt 4: 800ms
+    /// - etc.
+    ///
+    /// Returns: Delay in milliseconds
+    calculate-backoff: func(attempt: u32, config: retry-config) -> u64;
+
+    /// Determine if a request should be retried
+    ///
+    /// Checks:
+    /// - Have we exceeded max attempts?
+    /// - Is the error retryable? (5xx yes, 4xx no)
+    /// - Is circuit breaker open? (don't retry)
+    ///
+    /// Parameters:
+    /// - error-message: Error description (e.g., "HTTP 503", "Circuit breaker is OPEN")
+    /// - attempt: Current attempt number (1-based)
+    /// - max-attempts: Maximum allowed attempts
+    ///
+    /// Returns: true if should retry, false otherwise
+    should-retry: func(error-message: string, attempt: u32, max-attempts: u32) -> bool;
+
+    /// Check if an HTTP status code is retryable
+    ///
+    /// Retryable: 5xx (server errors), 429 (too many requests)
+    /// Not retryable: 4xx (client errors), 2xx/3xx (success)
+    ///
+    /// Returns: true if retryable, false otherwise
+    is-retryable-status: func(status-code: u32) -> bool;
+
+    /// Check if we've exceeded max attempts
+    has-exceeded-max-attempts: func(attempt: u32, max-attempts: u32) -> bool;
+}
+
+world retry {
+    export strategy;
+}

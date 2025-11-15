@@ -1,0 +1,28 @@
+"""
+Retry Logic Component
+
+Pure retry strategy utilities for exponential backoff and retry decision making.
+Zero dependencies on Spin SDK - only wit-bindgen-rt.
+"""
+
+load("@rules_wasm_component//wasm_component:defs.bzl", "wasm_component")
+load("@rules_rust//rust:defs.bzl", "rust_test")
+
+# Build the component
+wasm_component(
+    name = "toyota_retry_logic",
+    package = "toyota:retry@0.1.0",
+    wit = "wit/strategy.wit",
+    crate_root = "src/lib.rs",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@crates//:wit-bindgen-rt",
+    ],
+)
+
+# Native target tests (faster than WASM)
+rust_test(
+    name = "toyota_retry_logic_test",
+    crate = ":toyota_retry_logic",
+    size = "small",
+)
