@@ -1,0 +1,9 @@
+package toyota:gateway@0.1.0;
+
+/// Gateway world - Stub version for standalone cargo-component builds
+/// (Full WAC composition with imports requires Bazel build)
+world gateway {
+    // No imports - this is a minimal stub for testing builds
+    // The full version with component imports is in gateway.wit
+    // and is used by Bazel's wac_plug for composition
+}

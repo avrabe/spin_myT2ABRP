@@ -1,8 +1,30 @@
 package toyota:gateway@0.1.0;
 
-/// Gateway world - imports will be added via WAC composition
+/// Gateway world - Spin HTTP handler that orchestrates all components
+///
+/// This gateway imports all extracted components and composes them together
+/// to provide the Toyota MyT to ABRP API service.
 world gateway {
-    /// Spin HTTP handler
-    /// Note: Component imports (business-logic, circuit-breaker)
-    /// are plugged in at composition time via wac_plug
+    // Component imports - wired via WAC composition
+
+    /// Input validation for credentials and data
+    import toyota:validation/validator@0.1.0;
+
+    /// Retry strategy with exponential backoff
+    import toyota:retry/strategy@0.1.0;
+
+    /// JWT token operations (generation, verification, hashing)
+    import toyota:business-logic/jwt@0.1.0;
+
+    /// Circuit breaker for resilient API calls
+    import toyota:circuit-breaker/breaker@0.1.0;
+
+    /// Data transformation (Toyota API ↔ ABRP format)
+    import toyota:data-transform/converter@0.1.0;
+
+    /// Toyota API type serialization/deserialization
+    import toyota:api-types/models@0.1.0;
+
+    /// Prometheus-compatible metrics collection
+    import toyota:metrics/collector@0.1.0;
 }

@@ -22,14 +22,19 @@ exports_files([
 ])
 
 # WAC composition - compose gateway with all components
-# Note: This creates the final WASM file that Spin will run
+# This creates the final WASM file that Spin will run
 wac_plug(
     name = "myt2abrp_app",
     component = "//components/gateway:gateway",
     plug = {
-        # Components plugged into gateway at build time
-        # Actual imports would be defined in gateway.wit
-        # For now, this just ensures all components are built and available
+        # Wire component imports to their implementations
+        "toyota:validation/validator@0.1.0": "//components/validation:toyota_validation",
+        "toyota:retry/strategy@0.1.0": "//components/retry-logic:toyota_retry_logic",
+        "toyota:business-logic/jwt@0.1.0": "//components/business-logic:business_logic",
+        "toyota:circuit-breaker/breaker@0.1.0": "//components/circuit-breaker:toyota_circuit_breaker",
+        "toyota:data-transform/converter@0.1.0": "//components/data-transform:toyota_data_transform",
+        "toyota:api-types/models@0.1.0": "//components/toyota-api-types:toyota_api_types",
+        "toyota:metrics/collector@0.1.0": "//components/metrics:toyota_metrics",
     },
     visibility = ["//visibility:public"],
 )
