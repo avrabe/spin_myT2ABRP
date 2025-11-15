@@ -15,12 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          target: wasm32-wasip1
+          targets: wasm32-wasip1
           components: clippy, rustfmt
       - name: Enable cache
         uses: Swatinem/rust-cache@v2
@@ -48,12 +45,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: nightly
-          override: true
-          target: wasm32-wasip1
+          targets: wasm32-wasip1
       - name: Enable cache
         uses: Swatinem/rust-cache@v2
       - name: Install udeps
@@ -84,10 +79,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+      - uses: dtolnay/rust-toolchain@stable
       - name: Enable cache
         uses: Swatinem/rust-cache@v2
       - name: Run tests
@@ -99,10 +91,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+      - uses: dtolnay/rust-toolchain@stable
       - name: Enable cache
         uses: Swatinem/rust-cache@v2
       - name: Install cargo-tarpaulin
