@@ -1,0 +1,50 @@
+package toyota:metrics@0.1.0;
+
+/// Prometheus-compatible metrics collection
+interface collector {
+    /// Record HTTP request to endpoint
+    record-request: func(endpoint: string);
+
+    /// Record error for endpoint
+    record-error: func(endpoint: string);
+
+    /// Record cache hit
+    record-cache-hit: func();
+
+    /// Record cache miss
+    record-cache-miss: func();
+
+    /// Record login attempt
+    record-login-attempt: func();
+
+    /// Record login failure
+    record-login-failure: func();
+
+    /// Increment active sessions count
+    increment-active-sessions: func();
+
+    /// Decrement active sessions count
+    decrement-active-sessions: func();
+
+    /// Record rate limit hit
+    record-rate-limit-hit: func();
+
+    /// Record circuit breaker open event
+    record-circuit-breaker-open: func();
+
+    /// Record retry attempt
+    record-retry-attempt: func();
+
+    /// Record successful retry
+    record-retry-success: func();
+
+    /// Record exhausted retry
+    record-retry-exhausted: func();
+
+    /// Export metrics in Prometheus text format
+    export-prometheus: func() -> string;
+}
+
+world metrics {
+    export collector;
+}

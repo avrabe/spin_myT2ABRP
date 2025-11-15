@@ -7,6 +7,7 @@ members = [
     "components/business-logic",
     "components/circuit-breaker",
     "components/gateway",
+    "components/metrics",
 ]
 
 
