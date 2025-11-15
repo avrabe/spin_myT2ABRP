@@ -15,7 +15,7 @@ component = "gateway"
 route = "/..."
 
 [component.gateway]
-source = "target/wasm32-wasip1/release/toyota_gateway.wasm"
+source = "../../target/wasm32-wasip1/release/toyota_gateway.wasm"
 allowed_outbound_hosts = []
 
 [component.gateway.build]
