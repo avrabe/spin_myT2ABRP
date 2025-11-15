@@ -36,6 +36,6 @@ utoipa = { version = "5.3", features = ["uuid", "chrono"] }
 # URL encoding/decoding for query parameters
 urlencoding = "2.1"
 
-myt = { path = "../myt", features = ["openapi"] }
+myt = { path = "../myt" }
 serde = { workspace = true }
 serde_json = { workspace = true }
