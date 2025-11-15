@@ -70,12 +70,12 @@ repos:
         files: '\.(rs|toml)$'
         stages: [manual]
 
-      # Run tests (only run manually or in CI)
+      # Run tests (run on push to catch regressions early)
       - id: cargo-test
         name: cargo test
         entry: cargo
-        args: ['test', '--lib', '--target', 'x86_64-unknown-linux-gnu']
+        args: ['test', '--lib', '--target', 'x86_64-unknown-linux-gnu', '--', '--test-threads=1']
         language: system
         pass_filenames: false
         files: '\.(rs|toml)$'
-        stages: [manual]
+        stages: [pre-push, manual]
