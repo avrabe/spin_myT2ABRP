@@ -2045,6 +2045,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "toyota-retry-logic"
+version = "0.1.0"
+dependencies = [
+ "wit-bindgen-rt 0.41.0",
+]
+
+[[package]]
 name = "toyota-validation"
 version = "0.1.0"
 dependencies = [

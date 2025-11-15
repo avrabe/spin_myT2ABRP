@@ -1,0 +1,24 @@
+[package]
+name = "toyota-retry-logic"
+version = "0.1.0"
+edition = "2021"
+description = "Pure retry strategy utilities for exponential backoff and retry decisions"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen-rt = { version = "0.41.0", features = ["bitflags"] }
+
+[package.metadata.component]
+package = "toyota:retry"
+
+[package.metadata.component.target]
+path = "wit"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
