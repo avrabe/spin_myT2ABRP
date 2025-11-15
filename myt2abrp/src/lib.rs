@@ -21,6 +21,10 @@ use uuid::Uuid;
 mod metrics;
 use metrics::METRICS;
 
+// Circuit breaker module for resilient API calls
+mod circuit_breaker;
+use circuit_breaker::toyota_api_breaker;
+
 // OpenAPI Documentation
 #[derive(OpenApi)]
 #[openapi(
@@ -766,9 +770,42 @@ async fn set_cached_vehicle_data(
 }
 
 async fn send_request(request: Request) -> anyhow::Result<Response> {
-    spin_sdk::http::send(request)
-        .await
-        .map_err(|e| anyhow::anyhow!("HTTP request failed: {:?}", e))
+    // Check circuit breaker before attempting request
+    let breaker = toyota_api_breaker();
+
+    if let Err(e) = breaker.can_attempt() {
+        warn!("Circuit breaker prevented Toyota API call: {}", e);
+        return Err(anyhow::anyhow!("Toyota API unavailable: {}", e));
+    }
+
+    // Attempt the request
+    let result = spin_sdk::http::send::<Request, Response>(request).await;
+
+    match result {
+        Ok(response) => {
+            // Check if response indicates success (2xx status code)
+            let status = response.status();
+            if *status >= 200 && *status < 300 {
+                breaker.record_success();
+                debug!("Toyota API call succeeded (status: {})", status);
+                Ok(response)
+            } else if *status >= 500 {
+                // 5xx errors count as failures for circuit breaker
+                breaker.record_failure();
+                error!("Toyota API returned server error (status: {})", status);
+                Err(anyhow::anyhow!("Toyota API error: HTTP {}", status))
+            } else {
+                // 4xx errors don't count as failures (client error, not service down)
+                Ok(response)
+            }
+        }
+        Err(e) => {
+            // Network/timeout errors count as failures
+            breaker.record_failure();
+            error!("Toyota API request failed: {:?}", e);
+            Err(anyhow::anyhow!("HTTP request failed: {:?}", e))
+        }
+    }
 }
 
 /// Fetch electric status with caching support

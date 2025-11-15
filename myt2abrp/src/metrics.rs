@@ -28,6 +28,9 @@ pub struct Metrics {
 
     // Rate limiting
     rate_limit_hits: AtomicU64,
+
+    // Circuit breaker
+    circuit_breaker_opens: AtomicU64,
 }
 
 impl Metrics {
@@ -43,6 +46,7 @@ impl Metrics {
             login_failures: AtomicU64::new(0),
             active_sessions: AtomicU64::new(0),
             rate_limit_hits: AtomicU64::new(0),
+            circuit_breaker_opens: AtomicU64::new(0),
         }
     }
 
@@ -92,6 +96,11 @@ impl Metrics {
     // Rate limiting
     pub fn record_rate_limit_hit(&self) {
         self.rate_limit_hits.fetch_add(1, Ordering::Relaxed);
+    }
+
+    // Circuit breaker
+    pub fn record_circuit_breaker_open(&self) {
+        self.circuit_breaker_opens.fetch_add(1, Ordering::Relaxed);
     }
 
     // Generate Prometheus-format metrics
@@ -190,6 +199,14 @@ impl Metrics {
         output.push_str(&format!(
             "myt2abrp_rate_limit_hits_total {}\n\n",
             self.rate_limit_hits.load(Ordering::Relaxed)
+        ));
+
+        // Circuit breaker
+        output.push_str("# HELP myt2abrp_circuit_breaker_opens_total Times circuit breaker opened\n");
+        output.push_str("# TYPE myt2abrp_circuit_breaker_opens_total counter\n");
+        output.push_str(&format!(
+            "myt2abrp_circuit_breaker_opens_total {}\n\n",
+            self.circuit_breaker_opens.load(Ordering::Relaxed)
         ));
 
         // Error rate
