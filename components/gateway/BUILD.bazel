@@ -1,6 +1,7 @@
 """
-Gateway Component - Spin HTTP handler
+Gateway Component - Component Model P2 HTTP handler
 Main entry point that imports and orchestrates all sub-components
+Exports wasi:http/incoming-handler@0.2.0 for full P2 compatibility
 """
 
 load("@rules_wasm_component//rust:defs.bzl", "rust_wasm_component")
@@ -14,7 +15,8 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
-# Gateway component - Spin HTTP handler
+# Gateway component - Pure Component Model P2 HTTP handler
+# Uses wit-bindgen directly (no spin-sdk) for full WAC composition support
 rust_wasm_component(
     name = "gateway",
     srcs = glob(["src/**/*.rs"]),
@@ -22,10 +24,9 @@ rust_wasm_component(
     world = "gateway",
     edition = "2021",
 
-    # Rust dependencies
+    # Rust dependencies - Pure Component Model (no spin-sdk)
     deps = [
-        "@crates//:spin-sdk",
-        "@crates//:anyhow",
+        "@crates//:wit-bindgen",
         "@crates//:wit-bindgen-rt",
     ],
 

@@ -8,8 +8,8 @@ license = "MIT"
 crate-type = ["cdylib"]
 
 [dependencies]
-spin-sdk = "5.1.1"
-anyhow = "1.0"
+# Pure Component Model dependencies (no spin-sdk)
+wit-bindgen = { version = "0.41.0", default-features = false }
 wit-bindgen-rt = { version = "0.41.0", features = ["bitflags"] }
 
 [package.metadata.component]

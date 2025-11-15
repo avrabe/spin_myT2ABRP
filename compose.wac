@@ -1,16 +1,32 @@
 // WebAssembly Composition (WAC) file
-// Composes business logic component for testing or future integration
+// Full Component Model P2 composition for Toyota MyT2ABRP Gateway
+//
+// This composes 8 WebAssembly components into a single HTTP service:
+// - 7 business logic components (validation, retry, JWT, circuit-breaker, transform, types, metrics)
+// - 1 gateway component that exports wasi:http/incoming-handler@0.2.0
 
 package toyota:gateway-app@0.1.0;
 
-// Import business logic component
+// Instantiate all business logic components
+let validation = new toyota:validation@0.1.0 { };
+let retry-logic = new toyota:retry-logic@0.1.0 { };
 let business-logic = new toyota:business-logic@0.1.0 { };
+let circuit-breaker = new toyota:circuit-breaker@0.1.0 { };
+let data-transform = new toyota:data-transform@0.1.0 { };
+let api-types = new toyota:api-types@0.1.0 { };
+let metrics = new toyota:metrics@0.1.0 { };
 
-// Export all business logic functions for testing
-export business-logic...;
+// Compose gateway with all imported components wired via WAC
+let gateway = new toyota:gateway@0.1.0 {
+    "toyota:validation/validator@0.1.0": validation."toyota:validation/validator@0.1.0",
+    "toyota:retry/strategy@0.1.0": retry-logic."toyota:retry/strategy@0.1.0",
+    "toyota:business-logic/jwt@0.1.0": business-logic."toyota:business-logic/jwt@0.1.0",
+    "toyota:circuit-breaker/breaker@0.1.0": circuit-breaker."toyota:circuit-breaker/breaker@0.1.0",
+    "toyota:data-transform/converter@0.1.0": data-transform."toyota:data-transform/converter@0.1.0",
+    "toyota:api-types/models@0.1.0": api-types."toyota:api-types/models@0.1.0",
+    "toyota:metrics/collector@0.1.0": metrics."toyota:metrics/collector@0.1.0",
+};
 
-// Future: Plug into gateway component
-// let gateway = new toyota:spin-gateway {
-//     "toyota:business-logic/jwt": business-logic.jwt,
-// };
-// export gateway."wasi:http/incoming-handler@0.2.0"...;
+// Export the HTTP handler from the composed gateway
+// This is what Spin (or any WASI HTTP host) will call
+export gateway."wasi:http/incoming-handler@0.2.0"...;

@@ -1,0 +1,15 @@
+{
+  "name": "myt2abrp",
+  "version": "0.1.0",
+  "description": "Toyota MyT to ABRP Gateway - WebAssembly Component Model",
+  "private": true,
+  "scripts": {
+    "bazel": "bazelisk",
+    "build": "bazelisk build //:myt2abrp_app",
+    "test": "bazelisk test //components/...",
+    "clean": "bazelisk clean"
+  },
+  "devDependencies": {
+    "@bazel/bazelisk": "^1.24.1"
+  }
+}
