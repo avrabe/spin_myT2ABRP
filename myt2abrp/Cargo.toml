@@ -45,11 +45,12 @@ serde_json = { workspace = true }
 # Testing utilities
 tempfile = "3.0"
 predicates = "3.0"
-# HTTP mocking for integration tests
-wiremock = "0.6"
-# Async testing utilities
-tokio-test = "0.4"
-# Mock time for testing TTL and expiry
-mockall = "0.13"
 # Serial test execution for env-dependent tests
 serial_test = "3.2"
+
+# HTTP mocking for integration tests (native only)
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+wiremock = "0.6"
+tokio = { version = "1.43", features = ["macros", "rt-multi-thread"] }
+tokio-test = "0.4"
+mockall = "0.13"

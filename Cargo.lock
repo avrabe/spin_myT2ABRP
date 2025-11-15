@@ -1053,6 +1053,7 @@ dependencies = [
  "sha2",
  "spin-sdk",
  "tempfile",
+ "tokio",
  "tokio-test",
  "tracing",
  "urlencoding",
