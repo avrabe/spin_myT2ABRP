@@ -1,0 +1,82 @@
+"""
+Business Logic Component - JWT operations
+Standalone WebAssembly component with zero Spin dependencies
+"""
+
+load("@rules_wasm_component//rust:defs.bzl", "rust_wasm_component")
+load("@rules_wasm_component//wit:defs.bzl", "wit_bindgen")
+
+# WIT interface definition
+filegroup(
+    name = "jwt_wit",
+    srcs = glob(["wit/**/*.wit"]),
+    visibility = ["//visibility:public"],
+)
+
+# Build the WebAssembly component
+rust_wasm_component(
+    name = "business_logic",
+    srcs = glob([
+        "src/**/*.rs",
+    ]),
+    wit = ":jwt_wit",
+    world = "business-logic",
+    edition = "2021",
+
+    # Rust dependencies
+    deps = [
+        "@crates//:jsonwebtoken",
+        "@crates//:serde",
+        "@crates//:serde_json",
+        "@crates//:hmac",
+        "@crates//:sha2",
+        "@crates//:hex",
+        "@crates//:uuid",
+        "@crates//:wit-bindgen-rt",
+    ],
+
+    # Build profiles
+    profiles = ["debug", "release"],
+
+    # Compilation flags
+    rustc_flags = [
+        "--cfg",
+        "feature=\"rust_crypto\"",
+    ],
+
+    visibility = ["//visibility:public"],
+)
+
+# Unit tests (native target for speed)
+rust_test(
+    name = "business_logic_test",
+    crate = ":business_logic",
+    edition = "2021",
+    deps = [
+        "@crates//:jsonwebtoken",
+        "@crates//:serde",
+        "@crates//:serde_json",
+        "@crates//:hmac",
+        "@crates//:sha2",
+        "@crates//:hex",
+        "@crates//:uuid",
+    ],
+)
+
+# Validate component structure
+sh_test(
+    name = "validate_component",
+    srcs = ["//tools:validate_component.sh"],
+    args = ["$(location :business_logic)"],
+    data = [":business_logic"],
+    deps = ["@bazel_tools//tools/bash/runfiles"],
+)
+
+# Wasmtime integration test
+sh_test(
+    name = "wasmtime_test",
+    srcs = ["wasmtime_test.sh"],
+    args = ["$(location :business_logic)"],
+    data = [":business_logic"],
+    deps = ["@bazel_tools//tools/bash/runfiles"],
+)

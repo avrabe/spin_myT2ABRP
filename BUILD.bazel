@@ -1,0 +1,23 @@
+"""
+Root BUILD file for Toyota MyT2ABRP WebAssembly component system
+"""
+
+# Export test script for validation
+exports_files([
+    "test-component.sh",
+])
+
+# WAC composition - currently exports business-logic for testing
+load("@rules_wasm_component//wac:defs.bzl", "wac_plug")
+
+wac_plug(
+    name = "composed_app",
+    component = "//components/business-logic:business_logic",
+    # Future: plug into gateway component when available
+    # plug = {
+    #     "//components/gateway:gateway": {
+    #         "toyota:business-logic/jwt": "//components/business-logic:business_logic",
+    #     },
+    # },
+    visibility = ["//visibility:public"],
+)

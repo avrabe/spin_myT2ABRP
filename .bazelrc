@@ -1,0 +1,37 @@
+# Bazel configuration for WebAssembly component builds
+
+# Use modern Bazel module system (bzlmod)
+common --enable_bzlmod
+
+# Build settings
+build --incompatible_strict_action_env
+build --announce_rc
+
+# Show test output
+test --test_output=all
+
+# Use remote cache if available (optional)
+# build --remote_cache=...
+
+# Platform configuration
+build --host_platform=@platforms//host
+build --platforms=@platforms//host
+
+# Optimize for component builds
+build:release --compilation_mode=opt
+build:release --strip=always
+
+# Debug builds
+build:debug --compilation_mode=dbg
+build:debug --strip=never
+
+# WASM-specific settings
+build --copt=-fno-exceptions  # WASI default
+build --copt=-fno-rtti
+
+# Show progress
+build --show_progress
+build --progress_report_interval=1
+
+# Performance
+build --jobs=auto

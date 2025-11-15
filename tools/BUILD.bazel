@@ -1,0 +1,7 @@
+"""
+Build tools and scripts
+"""
+
+exports_files([
+    "validate_component.sh",
+])
