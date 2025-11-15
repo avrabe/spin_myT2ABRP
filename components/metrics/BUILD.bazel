@@ -1,20 +1,18 @@
 """
-Circuit Breaker Component
+Metrics Component
 
-Resilient API call protection with classic three-state circuit breaker pattern.
+Prometheus-compatible metrics collection for observability.
 Zero dependencies on Spin SDK - only wit-bindgen-rt.
 """
 
 load("@rules_wasm_component//wasm_component:defs.bzl", "wasm_component")
 load("@rules_rust//rust:defs.bzl", "rust_test")
 
-package(default_visibility = ["//visibility:public"])
-
 # Build the component
 wasm_component(
-    name = "toyota_circuit_breaker",
-    package = "toyota:circuit-breaker@0.1.0",
-    wit = "wit/breaker.wit",
+    name = "toyota_metrics",
+    package = "toyota:metrics@0.1.0",
+    wit = "wit/collector.wit",
     crate_root = "src/lib.rs",
     visibility = ["//visibility:public"],
     deps = [
@@ -24,7 +22,7 @@ wasm_component(
 
 # Native target tests (faster than WASM)
 rust_test(
-    name = "toyota_circuit_breaker_test",
-    crate = ":toyota_circuit_breaker",
+    name = "toyota_metrics_test",
+    crate = ":toyota_metrics",
     size = "small",
 )
