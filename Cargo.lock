@@ -2032,8 +2032,7 @@ dependencies = [
 name = "toyota-gateway"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "spin-sdk",
+ "wit-bindgen 0.41.0",
  "wit-bindgen-rt 0.41.0",
 ]
 
@@ -2476,6 +2475,15 @@ dependencies = [
  "serde_json",
  "tokio",
  "url",
+]
+
+[[package]]
+name = "wit-bindgen"
+version = "0.41.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10fb6648689b3929d56bbc7eb1acf70c9a42a29eb5358c67c10f54dbd5d695de"
+dependencies = [
+ "wit-bindgen-rt 0.41.0",
 ]
 
 [[package]]
