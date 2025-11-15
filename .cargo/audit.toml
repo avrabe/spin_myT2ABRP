@@ -1,0 +1,13 @@
+# cargo-audit configuration
+#
+# Configuration file for cargo-audit security vulnerability scanner
+
+[advisories]
+# List of advisory IDs to ignore
+ignore = [
+    # RUSTSEC-2023-0071: Marvin Attack in rsa crate (dependency of jsonwebtoken 10.x)
+    # Justification: We only use HS256 (HMAC-SHA256) for JWT signing in this project
+    # The vulnerable RSA code path is never executed in our codebase
+    # See: myt2abrp/src/lib.rs:87 where JWT_ALGORITHM is set to Algorithm::HS256
+    "RUSTSEC-2023-0071",
+]

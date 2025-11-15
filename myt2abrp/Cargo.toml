@@ -28,7 +28,8 @@ chrono = "0.4"
 sha2 = "0.10"
 hmac = "0.12"
 # JWT token generation and validation
-jsonwebtoken = "9.3"
+# Note: rsa 0.9.9 has RUSTSEC-2023-0071 (Marvin Attack), but we only use HS256 (HMAC), not RSA
+jsonwebtoken = { version = "10.2.0", default-features = false, features = ["rust_crypto"] }
 # Structured logging with tracing
 tracing = "0.1"
 # OpenAPI documentation generation
