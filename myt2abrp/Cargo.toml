@@ -51,3 +51,5 @@ wiremock = "0.6"
 tokio-test = "0.4"
 # Mock time for testing TTL and expiry
 mockall = "0.13"
+# Serial test execution for env-dependent tests
+serial_test = "3.2"
