@@ -1,16 +1,16 @@
-/// Toyota MyT2ABRP Gateway - Composed from 7 components via WAC
-///
-/// This gateway is designed to orchestrate all sub-components via WAC composition:
-/// - validation: Input validation for credentials
-/// - retry: Retry strategy with exponential backoff
-/// - business-logic: JWT token operations
-/// - circuit-breaker: Resilient API calls
-/// - data-transform: Toyota API ↔ ABRP conversion
-/// - api-types: Type serialization/deserialization
-/// - metrics: Prometheus metrics collection
-///
-/// IMPORTANT: Full WAC composition with all imports requires Bazel build.
-/// Standalone cargo-component builds create a minimal gateway stub for testing.
+//! Toyota MyT2ABRP Gateway - Composed from 7 components via WAC
+//!
+//! This gateway is designed to orchestrate all sub-components via WAC composition:
+//! - validation: Input validation for credentials
+//! - retry: Retry strategy with exponential backoff
+//! - business-logic: JWT token operations
+//! - circuit-breaker: Resilient API calls
+//! - data-transform: Toyota API ↔ ABRP conversion
+//! - api-types: Type serialization/deserialization
+//! - metrics: Prometheus metrics collection
+//!
+//! IMPORTANT: Full WAC composition with all imports requires Bazel build.
+//! Standalone cargo-component builds create a minimal gateway stub for testing.
 
 use spin_sdk::http::{IncomingRequest, Response, ResponseBuilder};
 use spin_sdk::http_component;
