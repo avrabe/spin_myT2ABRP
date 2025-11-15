@@ -31,6 +31,11 @@ pub struct Metrics {
 
     // Circuit breaker
     circuit_breaker_opens: AtomicU64,
+
+    // Retry logic
+    retry_attempts: AtomicU64,
+    retry_successes: AtomicU64,
+    retry_exhausted: AtomicU64,
 }
 
 impl Metrics {
@@ -47,6 +52,9 @@ impl Metrics {
             active_sessions: AtomicU64::new(0),
             rate_limit_hits: AtomicU64::new(0),
             circuit_breaker_opens: AtomicU64::new(0),
+            retry_attempts: AtomicU64::new(0),
+            retry_successes: AtomicU64::new(0),
+            retry_exhausted: AtomicU64::new(0),
         }
     }
 
@@ -101,6 +109,19 @@ impl Metrics {
     // Circuit breaker
     pub fn record_circuit_breaker_open(&self) {
         self.circuit_breaker_opens.fetch_add(1, Ordering::Relaxed);
+    }
+
+    // Retry logic
+    pub fn record_retry_attempt(&self) {
+        self.retry_attempts.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn record_retry_success(&self) {
+        self.retry_successes.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn record_retry_exhausted(&self) {
+        self.retry_exhausted.fetch_add(1, Ordering::Relaxed);
     }
 
     // Generate Prometheus-format metrics
@@ -207,6 +228,28 @@ impl Metrics {
         output.push_str(&format!(
             "myt2abrp_circuit_breaker_opens_total {}\n\n",
             self.circuit_breaker_opens.load(Ordering::Relaxed)
+        ));
+
+        // Retry logic
+        output.push_str("# HELP myt2abrp_retry_attempts_total Total retry attempts (excludes first attempt)\n");
+        output.push_str("# TYPE myt2abrp_retry_attempts_total counter\n");
+        output.push_str(&format!(
+            "myt2abrp_retry_attempts_total {}\n\n",
+            self.retry_attempts.load(Ordering::Relaxed)
+        ));
+
+        output.push_str("# HELP myt2abrp_retry_successes_total Requests that succeeded after retry\n");
+        output.push_str("# TYPE myt2abrp_retry_successes_total counter\n");
+        output.push_str(&format!(
+            "myt2abrp_retry_successes_total {}\n\n",
+            self.retry_successes.load(Ordering::Relaxed)
+        ));
+
+        output.push_str("# HELP myt2abrp_retry_exhausted_total Requests that failed after all retries\n");
+        output.push_str("# TYPE myt2abrp_retry_exhausted_total counter\n");
+        output.push_str(&format!(
+            "myt2abrp_retry_exhausted_total {}\n\n",
+            self.retry_exhausted.load(Ordering::Relaxed)
         ));
 
         // Error rate

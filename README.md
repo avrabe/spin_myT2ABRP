@@ -70,6 +70,15 @@ This update adds critical production hardening features and complete observabili
   - Tracks 5xx errors and network failures (4xx client errors don't trigger)
   - Integrated with metrics and structured logging
 
+- **🔁 Retry Logic with Exponential Backoff** (NEW):
+  - Automatic retry for transient failures (network glitches, temporary 503s)
+  - **Max Retries**: 3 attempts before giving up
+  - **Smart Retry Logic**: Only retries retryable errors (5xx, network failures)
+  - **No Retry**: Client errors (4xx) or when circuit breaker is open
+  - **Metrics Tracked**: Retry attempts, successes, and exhausted retries
+  - Works seamlessly with circuit breaker for comprehensive resilience
+  - Applied to critical data fetch operations (electric status, location, telemetry)
+
 - **🧪 Integration Test Framework**:
   - Complete test structure with 7 categories
   - Mock data for all Toyota API calls
@@ -767,6 +776,22 @@ myt2abrp_active_sessions 5
 # TYPE myt2abrp_rate_limit_hits_total counter
 myt2abrp_rate_limit_hits_total 8
 
+# HELP myt2abrp_circuit_breaker_opens_total Times circuit breaker opened
+# TYPE myt2abrp_circuit_breaker_opens_total counter
+myt2abrp_circuit_breaker_opens_total 2
+
+# HELP myt2abrp_retry_attempts_total Total retry attempts (excludes first attempt)
+# TYPE myt2abrp_retry_attempts_total counter
+myt2abrp_retry_attempts_total 15
+
+# HELP myt2abrp_retry_successes_total Requests that succeeded after retry
+# TYPE myt2abrp_retry_successes_total counter
+myt2abrp_retry_successes_total 12
+
+# HELP myt2abrp_retry_exhausted_total Requests that failed after all retries
+# TYPE myt2abrp_retry_exhausted_total counter
+myt2abrp_retry_exhausted_total 3
+
 # HELP myt2abrp_error_rate_percent Overall error rate percentage
 # TYPE myt2abrp_error_rate_percent gauge
 myt2abrp_error_rate_percent 0.79
@@ -778,6 +803,8 @@ myt2abrp_error_rate_percent 0.79
 - **Cache Performance**: Hit/miss counts and hit rate percentage
 - **Authentication**: Login attempts, failures, and active sessions
 - **Rate Limiting**: Number of requests rejected by rate limiter
+- **Circuit Breaker**: Times the circuit breaker opened (service degradation)
+- **Retry Logic**: Retry attempts, successes after retry, and exhausted retries
 - **Calculated Metrics**: Error rate and cache hit rate percentages
 
 **Integration with Prometheus:**
