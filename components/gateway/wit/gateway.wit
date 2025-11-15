@@ -1,9 +1,12 @@
 package toyota:gateway@0.1.0;
 
-/// Gateway world - Spin HTTP handler that orchestrates all components
+/// Gateway world - Component Model HTTP handler that orchestrates all components
 ///
 /// This gateway imports all extracted components and composes them together
 /// to provide the Toyota MyT to ABRP API service.
+///
+/// IMPORTANT: This world exports wasi:http/incoming-handler@0.2.0 for full
+/// Component Model P2 compatibility and WAC composition.
 world gateway {
     // Component imports - wired via WAC composition
 
@@ -27,4 +30,8 @@ world gateway {
 
     /// Prometheus-compatible metrics collection
     import toyota:metrics/collector@0.1.0;
+
+    // Export WASI HTTP handler for Component Model P2 compatibility
+    /// HTTP incoming request handler (WASI 0.2.0)
+    export wasi:http/incoming-handler@0.2.0;
 }
