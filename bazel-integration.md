@@ -43,8 +43,8 @@ We've integrated Bazel with [rules_wasm_component](https://github.com/pulseengin
 
 | File | Purpose |
 |------|---------|
-| `BAZEL-BUILD.md` | Complete Bazel build guide (usage, commands, advanced topics) |
-| `BAZEL-INTEGRATION.md` | This file - integration overview |
+| `bazel-build.md` | Complete Bazel build guide (usage, commands, advanced topics) |
+| `bazel-integration.md` | This file - integration overview |
 
 ## Architecture
 
@@ -318,4 +318,4 @@ While maintaining Cargo for IDE support and local development.
 
 **Status**: ✅ Integration Complete
 
-See `BAZEL-BUILD.md` for complete usage guide.
+See `bazel-build.md` for complete usage guide.

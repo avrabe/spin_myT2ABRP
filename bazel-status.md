@@ -46,9 +46,9 @@ Integrate Bazel build system using `rules_wasm_component` to provide:
 
 | File | Status | Description |
 |------|--------|-------------|
-| `BAZEL-BUILD.md` | ✅ Complete | Complete build system guide (11 pages) |
-| `BAZEL-INTEGRATION.md` | ✅ Complete | Integration and migration guide (10 pages) |
-| `POC-COMPONENT-COMPOSITION.md` | ✅ Complete | Component architecture PoC (11 pages) |
+| `bazel-build.md` | ✅ Complete | Complete build system guide (11 pages) |
+| `bazel-integration.md` | ✅ Complete | Integration and migration guide (10 pages) |
+| `poc-component-composition.md` | ✅ Complete | Component architecture PoC (11 pages) |
 
 ### 5. Bazelisk Installation
 
@@ -268,10 +268,10 @@ spin_myT2ABRP/
 │   └── validate_component.sh      # Validation script
 │
 └── docs/
-    ├── BAZEL-BUILD.md             # Build guide
-    ├── BAZEL-INTEGRATION.md       # Integration guide
-    ├── BAZEL-STATUS.md            # This file
-    └── POC-COMPONENT-COMPOSITION.md
+    ├── bazel-build.md             # Build guide
+    ├── bazel-integration.md       # Integration guide
+    ├── bazel-status.md            # This file
+    └── poc-component-composition.md
 ```
 
 ## 🔄 Git History

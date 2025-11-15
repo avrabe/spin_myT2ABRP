@@ -64,4 +64,4 @@ Each component:
 
 ## Documentation
 
-See [../POC-COMPONENT-COMPOSITION.md](../POC-COMPONENT-COMPOSITION.md) for the complete proof of concept documentation.
+See [../poc-component-composition.md](../poc-component-composition.md) for the complete proof of concept documentation.

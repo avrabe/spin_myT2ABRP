@@ -82,7 +82,7 @@ spin_myT2ABRP/
 │       └── toyota_business_logic.wasm  # ✅ 1.4 MB component
 │
 ├── test-component.sh              # Validation script
-└── POC-COMPONENT-COMPOSITION.md   # This file
+└── poc-component-composition.md   # This file
 ```
 
 ## 🧪 Testing the Component
