@@ -1,4 +1,9 @@
-load("@rules_rust//rust:defs.bzl", "rust_library")
+"""
+Gateway Component - Spin HTTP handler
+Main entry point that imports and orchestrates all sub-components
+"""
+
+load("@rules_wasm_component//rust:defs.bzl", "rust_wasm_component")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -6,19 +11,26 @@ package(default_visibility = ["//visibility:public"])
 filegroup(
     name = "gateway_wit",
     srcs = glob(["wit/**/*.wit"]),
+    visibility = ["//visibility:public"],
 )
 
-# Gateway component (placeholder - will be composed with wac_plug)
-rust_library(
-    name = "gateway_lib",
+# Gateway component - Spin HTTP handler
+rust_wasm_component(
+    name = "gateway",
     srcs = glob(["src/**/*.rs"]),
+    wit = ":gateway_wit",
+    world = "gateway",
     edition = "2021",
-    crate_type = "cdylib",
+
+    # Rust dependencies
     deps = [
         "@crates//:spin-sdk",
         "@crates//:anyhow",
         "@crates//:wit-bindgen-rt",
     ],
-)
 
-# TODO: Add rust_wasm_component rule for proper component build
+    # Build profiles
+    profiles = ["debug", "release"],
+
+    visibility = ["//visibility:public"],
+)
