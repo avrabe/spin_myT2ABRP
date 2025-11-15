@@ -1,0 +1,27 @@
+[package]
+name = "toyota-data-transform"
+version = "0.1.0"
+edition = "2021"
+description = "Pure data transformation from Toyota API to ABRP telemetry format"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen-rt = { version = "0.41.0", features = ["bitflags"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+[package.metadata.component]
+package = "toyota:data-transform"
+
+[package.metadata.component.target]
+path = "wit"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true

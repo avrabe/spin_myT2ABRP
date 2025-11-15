@@ -1,0 +1,69 @@
+package toyota:data-transform@0.1.0;
+
+/// Data transformation utilities for converting Toyota API data to ABRP format
+///
+/// This component provides pure business logic for transforming vehicle data
+/// from Toyota Connected Services format to A Better Route Planner (ABRP)
+/// telemetry format.
+interface converter {
+    /// ABRP telemetry record
+    record abrp-telemetry {
+        /// UTC timestamp (Unix seconds)
+        utc: s64,
+        /// State of Charge (0-100)
+        soc: f64,
+        /// Latitude (optional)
+        lat: option<f64>,
+        /// Longitude (optional)
+        lon: option<f64>,
+        /// Is vehicle charging (optional)
+        is-charging: option<bool>,
+        /// Is vehicle parked (optional)
+        is-parked: option<bool>,
+        /// Odometer reading in km (optional)
+        odometer: option<f64>,
+        /// Estimated battery range in km (optional)
+        est-battery-range: option<f64>,
+        /// API version
+        version: string,
+    }
+
+    /// Parse ISO 8601 timestamp to Unix seconds
+    ///
+    /// Examples: "2025-01-15T12:00:00Z", "2025-01-15T12:00:00+00:00"
+    /// Returns current time if parsing fails
+    parse-iso8601-timestamp: func(iso-string: string) -> s64;
+
+    /// Determine if vehicle is charging from status string
+    ///
+    /// Returns true if status contains "CHARGING" or "CONNECTED" (case-insensitive)
+    is-charging-status: func(status: string) -> bool;
+
+    /// Convert Toyota electric status to ABRP telemetry
+    ///
+    /// Takes JSON strings from toyota-api-types component and converts to ABRP format
+    ///
+    /// Parameters:
+    /// - electric-status-json: ElectricStatusResponse as JSON
+    /// - location-json: Optional LocationResponse as JSON
+    /// - telemetry-json: Optional TelemetryResponse as JSON
+    /// - version: API version string
+    ///
+    /// Returns: ABRP telemetry data or error message
+    toyota-to-abrp: func(
+        electric-status-json: string,
+        location-json: option<string>,
+        telemetry-json: option<string>,
+        version: string
+    ) -> result<abrp-telemetry, string>;
+
+    /// Serialize ABRP telemetry to JSON
+    serialize-abrp-telemetry: func(telemetry: abrp-telemetry) -> string;
+
+    /// Deserialize ABRP telemetry from JSON
+    deserialize-abrp-telemetry: func(json: string) -> result<abrp-telemetry, string>;
+}
+
+world data-transform {
+    export converter;
+}

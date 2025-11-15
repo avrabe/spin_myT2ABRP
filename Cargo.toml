@@ -6,6 +6,7 @@ members = [
     "myt",
     "components/business-logic",
     "components/circuit-breaker",
+    "components/data-transform",
     "components/gateway",
     "components/metrics",
     "components/toyota-api-types",
