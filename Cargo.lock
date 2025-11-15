@@ -2019,6 +2019,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "toyota-data-transform"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "wit-bindgen-rt 0.41.0",
+]
+
+[[package]]
 name = "toyota-gateway"
 version = "0.1.0"
 dependencies = [
