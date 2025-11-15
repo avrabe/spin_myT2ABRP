@@ -1,0 +1,8 @@
+package toyota:gateway@0.1.0;
+
+/// Gateway world - imports will be added via WAC composition
+world gateway {
+    /// Spin HTTP handler
+    /// Note: Component imports (business-logic, circuit-breaker)
+    /// are plugged in at composition time via wac_plug
+}

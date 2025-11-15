@@ -2009,6 +2009,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "toyota-gateway"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "spin-sdk",
+ "wit-bindgen-rt 0.41.0",
+]
+
+[[package]]
 name = "tracing"
 version = "0.1.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
