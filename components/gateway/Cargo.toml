@@ -1,0 +1,24 @@
+[package]
+name = "toyota-gateway"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+spin-sdk = "5.1.1"
+anyhow = "1.0"
+wit-bindgen-rt = { version = "0.41.0", features = ["bitflags"] }
+
+[package.metadata.component]
+package = "toyota:gateway"
+
+[package.metadata.component.target]
+path = "wit"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true

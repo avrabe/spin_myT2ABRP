@@ -1,0 +1,22 @@
+spin_manifest_version = 2
+
+[application]
+name = "toyota-gateway-composed"
+version = "0.1.0"
+description = "Component-composed Toyota Gateway"
+authors = ["Ralf Anton Beier <ralf_beier@me.com>"]
+
+[application.trigger.http]
+base = "/"
+
+[[trigger.http]]
+id = "gateway"
+component = "gateway"
+route = "/..."
+
+[component.gateway]
+source = "target/wasm32-wasip1/release/toyota_gateway.wasm"
+allowed_outbound_hosts = []
+
+[component.gateway.build]
+command = "cargo component build --release"

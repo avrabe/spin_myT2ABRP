@@ -1,0 +1,24 @@
+load("@rules_rust//rust:defs.bzl", "rust_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# WIT interface for gateway
+filegroup(
+    name = "gateway_wit",
+    srcs = glob(["wit/**/*.wit"]),
+)
+
+# Gateway component (placeholder - will be composed with wac_plug)
+rust_library(
+    name = "gateway_lib",
+    srcs = glob(["src/**/*.rs"]),
+    edition = "2021",
+    crate_type = "cdylib",
+    deps = [
+        "@crates//:spin-sdk",
+        "@crates//:anyhow",
+        "@crates//:wit-bindgen-rt",
+    ],
+)
+
+# TODO: Add rust_wasm_component rule for proper component build
