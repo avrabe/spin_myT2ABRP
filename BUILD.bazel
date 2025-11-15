@@ -1,5 +1,11 @@
 """
 Root BUILD file for Toyota MyT2ABRP WebAssembly component system
+
+Current Components:
+- business-logic: JWT operations (400 lines)
+- circuit-breaker: Resilient API calls (184 lines)
+
+Future: Gateway component will import both via WAC composition
 """
 
 # Export test script for validation
@@ -7,17 +13,26 @@ exports_files([
     "test-component.sh",
 ])
 
-# WAC composition - currently exports business-logic for testing
-load("@rules_wasm_component//wac:defs.bzl", "wac_plug")
+# WAC composition - components are built independently for now
+# Future composition will look like:
+#
+# load("@rules_wasm_component//wac:defs.bzl", "wac_plug")
+#
+# wac_plug(
+#     name = "gateway_app",
+#     component = "//components/gateway:gateway",
+#     plug = {
+#         "toyota:business-logic/jwt": "//components/business-logic:business_logic",
+#         "toyota:circuit-breaker/breaker": "//components/circuit-breaker:circuit_breaker",
+#     },
+#     visibility = ["//visibility:public"],
+# )
 
-wac_plug(
-    name = "composed_app",
-    component = "//components/business-logic:business_logic",
-    # Future: plug into gateway component when available
-    # plug = {
-    #     "//components/gateway:gateway": {
-    #         "toyota:business-logic/jwt": "//components/business-logic:business_logic",
-    #     },
-    # },
-    visibility = ["//visibility:public"],
+# Test suite for all components
+test_suite(
+    name = "all_tests",
+    tests = [
+        "//components/business-logic:business_logic_test",
+        # circuit-breaker tests run via cargo test (native target)
+    ],
 )

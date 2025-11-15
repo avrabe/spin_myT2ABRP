@@ -1,0 +1,34 @@
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+# WIT interface
+filegroup(
+    name = "breaker_wit",
+    srcs = glob(["wit/**/*.wit"]),
+)
+
+# Circuit breaker component (placeholder - needs rust_wasm_component rule)
+# TODO: Add rust_wasm_component rule when available
+rust_library(
+    name = "circuit_breaker_lib",
+    srcs = glob(["src/**/*.rs"]),
+    edition = "2021",
+    crate_type = "cdylib",
+)
+
+# Unit tests
+rust_test(
+    name = "circuit_breaker_test",
+    crate = ":circuit_breaker_lib",
+    size = "small",
+)
+
+# Validation script
+sh_test(
+    name = "validate_component",
+    srcs = ["//tools:validate_component.sh"],
+    args = ["$(location :circuit_breaker_lib)"],
+    data = [":circuit_breaker_lib"],
+    tags = ["manual"],  # Run explicitly
+)
