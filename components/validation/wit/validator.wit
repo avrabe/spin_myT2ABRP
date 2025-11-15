@@ -1,0 +1,58 @@
+package toyota:validation@0.1.0;
+
+/// Input validation utilities for user credentials and data
+///
+/// This component provides pure validation logic for user inputs
+/// including email validation, length checks, and format validation.
+/// Zero dependencies on Spin SDK or platform-specific APIs.
+interface validator {
+    /// Validation configuration constants
+    record validation-config {
+        /// Maximum username length (default: 256)
+        max-username-length: u32,
+        /// Maximum password length (default: 256)
+        max-password-length: u32,
+    }
+
+    /// Get default validation configuration
+    get-default-config: func() -> validation-config;
+
+    /// Validate user credentials (username and password)
+    ///
+    /// Checks:
+    /// - Username is not empty
+    /// - Password is not empty
+    /// - Username length <= max-username-length
+    /// - Password length <= max-password-length
+    /// - Username contains '@' and '.' (basic email format)
+    ///
+    /// Returns: Ok(()) if valid, Err(message) if invalid
+    validate-credentials: func(
+        username: string,
+        password: string,
+        config: validation-config
+    ) -> result<_, string>;
+
+    /// Validate email format (basic check)
+    ///
+    /// Checks that email contains '@' and '.'
+    /// Returns: true if valid, false otherwise
+    is-valid-email: func(email: string) -> bool;
+
+    /// Validate string length is within bounds
+    ///
+    /// Returns: Ok(()) if valid, Err(message) if invalid
+    validate-string-length: func(
+        value: string,
+        field-name: string,
+        min-length: u32,
+        max-length: u32
+    ) -> result<_, string>;
+
+    /// Check if string is empty
+    is-empty: func(value: string) -> bool;
+}
+
+world validation {
+    export validator;
+}

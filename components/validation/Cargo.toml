@@ -1,0 +1,24 @@
+[package]
+name = "toyota-validation"
+version = "0.1.0"
+edition = "2021"
+description = "Pure input validation utilities for user credentials and data"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen-rt = { version = "0.41.0", features = ["bitflags"] }
+
+[package.metadata.component]
+package = "toyota:validation"
+
+[package.metadata.component.target]
+path = "wit"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true

@@ -1,0 +1,28 @@
+"""
+Validation Component
+
+Pure input validation logic for user credentials and data inputs.
+Zero dependencies on Spin SDK - only wit-bindgen-rt.
+"""
+
+load("@rules_wasm_component//wasm_component:defs.bzl", "wasm_component")
+load("@rules_rust//rust:defs.bzl", "rust_test")
+
+# Build the component
+wasm_component(
+    name = "toyota_validation",
+    package = "toyota:validation@0.1.0",
+    wit = "wit/validator.wit",
+    crate_root = "src/lib.rs",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@crates//:wit-bindgen-rt",
+    ],
+)
+
+# Native target tests (faster than WASM)
+rust_test(
+    name = "toyota_validation_test",
+    crate = ":toyota_validation",
+    size = "small",
+)
