@@ -34,7 +34,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-          target: wasm32-wasip1
+          targets: wasm32-wasip1
 
       - name: Install required cargo
         run: cargo install clippy-sarif sarif-fmt
