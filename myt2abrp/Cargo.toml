@@ -28,7 +28,7 @@ chrono = "0.4"
 sha2 = "0.10"
 hmac = "0.12"
 # JWT token generation and validation
-jsonwebtoken = "9.3"
+jsonwebtoken = "10.2"
 # Structured logging with tracing
 tracing = "0.1"
 # OpenAPI documentation generation
