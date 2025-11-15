@@ -456,9 +456,7 @@ impl Guest for Component {
         serde_json::to_string(&token).unwrap_or_default()
     }
 
-    fn deserialize_token_response(
-        json: String,
-    ) -> Result<(String, String, String, u32), String> {
+    fn deserialize_token_response(json: String) -> Result<(String, String, String, u32), String> {
         match serde_json::from_str::<TokenResponse>(&json) {
             Ok(token) => Ok((
                 token.access_token,
@@ -498,7 +496,10 @@ impl Guest for Component {
     fn deserialize_electric_status(json: String) -> Result<String, String> {
         match serde_json::from_str::<ElectricStatusResponse>(&json) {
             Ok(_) => Ok(json), // Return original JSON if valid
-            Err(e) => Err(format!("Failed to deserialize ElectricStatusResponse: {}", e)),
+            Err(e) => Err(format!(
+                "Failed to deserialize ElectricStatusResponse: {}",
+                e
+            )),
         }
     }
 
@@ -549,11 +550,7 @@ impl Guest for Component {
         }
     }
 
-    fn create_auth_request(
-        username: String,
-        password: String,
-        auth_id: Option<String>,
-    ) -> String {
+    fn create_auth_request(username: String, password: String, auth_id: Option<String>) -> String {
         let req = AuthenticateRequest::with_credentials(username, password, auth_id);
         serde_json::to_string(&req).unwrap_or_default()
     }

@@ -141,7 +141,8 @@ impl Metrics {
         ));
 
         // Circuit breaker
-        output.push_str("# HELP myt2abrp_circuit_breaker_opens_total Circuit breaker open events\n");
+        output
+            .push_str("# HELP myt2abrp_circuit_breaker_opens_total Circuit breaker open events\n");
         output.push_str("# TYPE myt2abrp_circuit_breaker_opens_total counter\n");
         output.push_str(&format!(
             "myt2abrp_circuit_breaker_opens_total {}\n\n",
@@ -193,19 +194,27 @@ impl Guest for Component {
     }
 
     fn increment_active_sessions() {
-        get_metrics().active_sessions.fetch_add(1, Ordering::Relaxed);
+        get_metrics()
+            .active_sessions
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     fn decrement_active_sessions() {
-        get_metrics().active_sessions.fetch_sub(1, Ordering::Relaxed);
+        get_metrics()
+            .active_sessions
+            .fetch_sub(1, Ordering::Relaxed);
     }
 
     fn record_rate_limit_hit() {
-        get_metrics().rate_limit_hits.fetch_add(1, Ordering::Relaxed);
+        get_metrics()
+            .rate_limit_hits
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     fn record_circuit_breaker_open() {
-        get_metrics().circuit_breaker_opens.fetch_add(1, Ordering::Relaxed);
+        get_metrics()
+            .circuit_breaker_opens
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     fn record_retry_attempt() {
@@ -213,11 +222,15 @@ impl Guest for Component {
     }
 
     fn record_retry_success() {
-        get_metrics().retry_successes.fetch_add(1, Ordering::Relaxed);
+        get_metrics()
+            .retry_successes
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     fn record_retry_exhausted() {
-        get_metrics().retry_exhausted.fetch_add(1, Ordering::Relaxed);
+        get_metrics()
+            .retry_exhausted
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     fn export_prometheus() -> String {

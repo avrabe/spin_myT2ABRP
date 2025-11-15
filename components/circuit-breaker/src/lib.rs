@@ -198,10 +198,7 @@ mod tests {
         let breaker = CircuitBreaker::new(config);
 
         // Initial state is closed
-        assert!(matches!(
-            breaker.get_state(),
-            CircuitState::Closed
-        ));
+        assert!(matches!(breaker.get_state(), CircuitState::Closed));
         assert!(breaker.can_attempt().is_ok());
 
         // Record failures
@@ -231,10 +228,7 @@ mod tests {
 
         breaker.record_success();
         assert_eq!(breaker.get_failure_count(), 0);
-        assert!(matches!(
-            breaker.get_state(),
-            CircuitState::Closed
-        ));
+        assert!(matches!(breaker.get_state(), CircuitState::Closed));
     }
 
     #[test]
@@ -256,17 +250,11 @@ mod tests {
 
         // Should transition to half-open
         assert!(breaker.can_attempt().is_ok());
-        assert!(matches!(
-            breaker.get_state(),
-            CircuitState::HalfOpen
-        ));
+        assert!(matches!(breaker.get_state(), CircuitState::HalfOpen));
 
         // Record successes to close
         breaker.record_success();
         breaker.record_success();
-        assert!(matches!(
-            breaker.get_state(),
-            CircuitState::Closed
-        ));
+        assert!(matches!(breaker.get_state(), CircuitState::Closed));
     }
 }

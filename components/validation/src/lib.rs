@@ -262,7 +262,8 @@ mod tests {
         assert!(result.is_ok());
 
         // Too long for custom limits
-        let result = validate_credentials_internal("verylongemail@example.com", "password", &config);
+        let result =
+            validate_credentials_internal("verylongemail@example.com", "password", &config);
         assert!(result.is_err());
     }
 }
