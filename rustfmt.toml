@@ -1,0 +1,2 @@
+# Rustfmt configuration for consistent formatting across versions
+edition = "2021"
