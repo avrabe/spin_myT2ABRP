@@ -7,3 +7,10 @@ spin.sig
 
 # Bazel outputs
 bazel-*
+
+# Node.js dependencies
+node_modules/
+
+# Downloaded binaries
+*.tar.gz
+*.zip
