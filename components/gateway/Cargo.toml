@@ -18,6 +18,9 @@ package = "toyota:gateway"
 [package.metadata.component.target]
 path = "wit"
 
+[package.metadata.cargo-udeps.ignore]
+normal = ["wit-bindgen-rt"]
+
 [profile.release]
 opt-level = "z"
 lto = true
