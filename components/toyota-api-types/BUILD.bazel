@@ -1,0 +1,32 @@
+"""
+Toyota API Types Component
+
+Pure data models for Toyota Connected Services APIs with zero dependencies
+on Spin SDK. Provides serialization/deserialization for authentication,
+vehicle data, and telemetry structures.
+"""
+
+load("@rules_wasm_component//wasm_component:defs.bzl", "wasm_component")
+load("@rules_rust//rust:defs.bzl", "rust_test")
+
+# Build the component
+wasm_component(
+    name = "toyota_api_types",
+    package = "toyota:api-types@0.1.0",
+    wit = "wit/types.wit",
+    crate_root = "src/lib.rs",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@crates//:serde",
+        "@crates//:serde_json",
+        "@crates//:serde-path-to-error",
+        "@crates//:wit-bindgen-rt",
+    ],
+)
+
+# Native target tests (faster than WASM)
+rust_test(
+    name = "toyota_api_types_test",
+    crate = ":toyota_api_types",
+    size = "small",
+)

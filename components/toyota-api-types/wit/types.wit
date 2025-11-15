@@ -1,0 +1,77 @@
+package toyota:api-types@0.1.0;
+
+/// Toyota API data type serialization/deserialization helpers
+///
+/// This component provides pure data models for Toyota Connected Services APIs
+/// including authentication, vehicle data, and telemetry structures.
+/// All types are Serde-compatible and have zero dependencies on Spin SDK.
+interface models {
+    /// Serialize TokenResponse to JSON
+    serialize-token-response: func(
+        access-token: string,
+        refresh-token: string,
+        id-token: string,
+        expires-in: u32
+    ) -> string;
+
+    /// Deserialize TokenResponse from JSON
+    deserialize-token-response: func(json: string) -> result<tuple<string, string, string, u32>, string>;
+
+    /// Serialize ElectricStatusResponse to JSON
+    serialize-electric-status: func(
+        battery-level: option<s32>,
+        charging-status: option<string>,
+        ev-range: option<f32>,
+        ev-range-with-ac: option<f32>,
+        remaining-charge-time: option<s32>,
+        timestamp: string
+    ) -> string;
+
+    /// Deserialize ElectricStatusResponse from JSON
+    deserialize-electric-status: func(json: string) -> result<string, string>;
+
+    /// Serialize VehicleInfo to JSON
+    serialize-vehicle-info: func(
+        vin: string,
+        model: option<string>,
+        model-name: option<string>,
+        model-year: option<string>,
+        alias: option<string>
+    ) -> string;
+
+    /// Deserialize VehicleListResponse from JSON
+    deserialize-vehicle-list: func(json: string) -> result<string, string>;
+
+    /// Serialize LocationResponse to JSON
+    serialize-location: func(
+        lat: f64,
+        lon: f64,
+        timestamp: string
+    ) -> string;
+
+    /// Deserialize LocationResponse from JSON
+    deserialize-location: func(json: string) -> result<tuple<f64, f64, string>, string>;
+
+    /// Create AuthenticateRequest with credentials
+    create-auth-request: func(
+        username: string,
+        password: string,
+        auth-id: option<string>
+    ) -> string;
+
+    /// Create TokenRequest for authorization code flow
+    create-token-request: func(code: string) -> string;
+
+    /// Create RefreshTokenRequest
+    create-refresh-request: func(refresh-token: string) -> string;
+
+    /// Check if cached token is expired
+    is-token-expired: func(
+        expires-at: s64,
+        current-time: s64
+    ) -> bool;
+}
+
+world toyota-api-types {
+    export models;
+}

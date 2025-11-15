@@ -1988,6 +1988,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "toyota-api-types"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "wit-bindgen-rt 0.41.0",
+]
+
+[[package]]
 name = "toyota-business-logic"
 version = "0.1.0"
 dependencies = [
