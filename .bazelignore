@@ -1,0 +1,9 @@
+# Ignore Cargo build artifacts to avoid conflicts
+target/
+
+# Ignore other workspace members that aren't Bazel-ified yet
+myt/
+myt2abrp/
+
+# Ignore test directories not managed by Bazel
+tests/wasmtime/

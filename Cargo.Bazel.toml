@@ -1,0 +1,27 @@
+# Cargo.toml for Bazel crate_universe
+# This defines Rust dependencies for Bazel builds
+# Separate from workspace Cargo.toml to avoid conflicts
+
+[package]
+name = "toyota-myt2abrp-bazel"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# JWT operations
+jsonwebtoken = { version = "10.2.0", default-features = false, features = ["rust_crypto"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Crypto for username hashing
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+
+# UUID for JWT IDs
+uuid = { version = "1.18", features = ["v4", "fast-rng"] }
+
+# WIT bindgen
+wit-bindgen-rt = "0.43.0"

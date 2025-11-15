@@ -1,0 +1,16 @@
+// WebAssembly Composition (WAC) file
+// Composes business logic component for testing or future integration
+
+package toyota:gateway-app@0.1.0;
+
+// Import business logic component
+let business-logic = new toyota:business-logic@0.1.0 { };
+
+// Export all business logic functions for testing
+export business-logic...;
+
+// Future: Plug into gateway component
+// let gateway = new toyota:spin-gateway {
+//     "toyota:business-logic/jwt": business-logic.jwt,
+// };
+// export gateway."wasi:http/incoming-handler@0.2.0"...;
