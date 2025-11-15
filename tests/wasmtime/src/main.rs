@@ -27,7 +27,7 @@ impl WasiView for MyState {
 
 fn main() -> Result<()> {
     println!("🧪 Testing JWT Component with Wasmtime (NO Spin!)\n");
-    println!("=" .repeat(60));
+    println!("=".repeat(60));
 
     // Setup Wasmtime engine with component model support
     let mut config = Config::new();
@@ -60,7 +60,7 @@ fn main() -> Result<()> {
 
     println!("\n" + &"=".repeat(60));
     println!("🧪 TEST 1: Generate Access Token");
-    println!("=" .repeat(60));
+    println!("=".repeat(60));
 
     let access_token = jwt
         .call_generate_access_token(&mut store, "testuser", &test_secret)?
@@ -68,11 +68,14 @@ fn main() -> Result<()> {
 
     println!("✅ Access token generated!");
     println!("   Token length: {} chars", access_token.len());
-    println!("   Token preview: {}...", &access_token[0..50.min(access_token.len())]);
+    println!(
+        "   Token preview: {}...",
+        &access_token[0..50.min(access_token.len())]
+    );
 
     println!("\n" + &"=".repeat(60));
     println!("🧪 TEST 2: Verify Access Token");
-    println!("=" .repeat(60));
+    println!("=".repeat(60));
 
     let claims = jwt
         .call_verify_token(&mut store, &access_token, &test_secret)?
@@ -90,7 +93,7 @@ fn main() -> Result<()> {
 
     println!("\n" + &"=".repeat(60));
     println!("🧪 TEST 3: Generate Refresh Token");
-    println!("=" .repeat(60));
+    println!("=".repeat(60));
 
     let refresh_token = jwt
         .call_generate_refresh_token(&mut store, "testuser", &test_secret)?
@@ -109,7 +112,7 @@ fn main() -> Result<()> {
 
     println!("\n" + &"=".repeat(60));
     println!("🧪 TEST 4: Token Security - Wrong Secret");
-    println!("=" .repeat(60));
+    println!("=".repeat(60));
 
     let wrong_secret = b"wrong-secret".to_vec();
     let result = jwt.call_verify_token(&mut store, &access_token, &wrong_secret)?;
@@ -126,7 +129,7 @@ fn main() -> Result<()> {
 
     println!("\n" + &"=".repeat(60));
     println!("🧪 TEST 5: Hash Username");
-    println!("=" .repeat(60));
+    println!("=".repeat(60));
 
     let hash1 = jwt.call_hash_username(&mut store, "testuser", &test_hmac)?;
     let hash2 = jwt.call_hash_username(&mut store, "testuser", &test_hmac)?;
@@ -137,14 +140,17 @@ fn main() -> Result<()> {
     println!("   Hash: {}", hash1);
 
     assert_eq!(hash1, hash2, "Same username should produce same hash");
-    assert_ne!(hash1, hash3, "Different usernames should produce different hashes");
+    assert_ne!(
+        hash1, hash3,
+        "Different usernames should produce different hashes"
+    );
 
     println!("   ✓ Consistency check passed");
     println!("   ✓ Uniqueness check passed");
 
     println!("\n" + &"=".repeat(60));
     println!("🧪 TEST 6: Invalid Token Format");
-    println!("=" .repeat(60));
+    println!("=".repeat(60));
 
     let invalid_token = "not.a.valid.jwt.token";
     let result = jwt.call_verify_token(&mut store, invalid_token, &test_secret)?;
@@ -161,7 +167,7 @@ fn main() -> Result<()> {
 
     println!("\n" + &"=".repeat(60));
     println!("✅ ALL TESTS PASSED!");
-    println!("=" .repeat(60));
+    println!("=".repeat(60));
     println!("\n🎉 SUCCESS: JWT component works standalone with wasmtime!");
     println!("💡 This component has ZERO Spin dependencies");
     println!("🚀 It can be composed with other components or used in any WASI runtime");
