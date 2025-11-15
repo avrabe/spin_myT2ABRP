@@ -3,9 +3,9 @@
 // Provides basic request metrics, cache statistics, and error tracking
 // in Prometheus text format for integration with monitoring systems.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
-use std::collections::HashMap;
 
 /// Global metrics collector
 pub struct Metrics {
@@ -190,7 +190,10 @@ impl Metrics {
 
         output.push_str("# HELP myt2abrp_cache_hit_rate_percent Cache hit rate percentage\n");
         output.push_str("# TYPE myt2abrp_cache_hit_rate_percent gauge\n");
-        output.push_str(&format!("myt2abrp_cache_hit_rate_percent {:.2}\n\n", hit_rate));
+        output.push_str(&format!(
+            "myt2abrp_cache_hit_rate_percent {:.2}\n\n",
+            hit_rate
+        ));
 
         // Authentication metrics
         output.push_str("# HELP myt2abrp_login_attempts_total Total login attempts\n");
@@ -215,7 +218,8 @@ impl Metrics {
         ));
 
         // Rate limiting
-        output.push_str("# HELP myt2abrp_rate_limit_hits_total Requests rejected by rate limiting\n");
+        output
+            .push_str("# HELP myt2abrp_rate_limit_hits_total Requests rejected by rate limiting\n");
         output.push_str("# TYPE myt2abrp_rate_limit_hits_total counter\n");
         output.push_str(&format!(
             "myt2abrp_rate_limit_hits_total {}\n\n",
@@ -223,7 +227,8 @@ impl Metrics {
         ));
 
         // Circuit breaker
-        output.push_str("# HELP myt2abrp_circuit_breaker_opens_total Times circuit breaker opened\n");
+        output
+            .push_str("# HELP myt2abrp_circuit_breaker_opens_total Times circuit breaker opened\n");
         output.push_str("# TYPE myt2abrp_circuit_breaker_opens_total counter\n");
         output.push_str(&format!(
             "myt2abrp_circuit_breaker_opens_total {}\n\n",
@@ -231,21 +236,27 @@ impl Metrics {
         ));
 
         // Retry logic
-        output.push_str("# HELP myt2abrp_retry_attempts_total Total retry attempts (excludes first attempt)\n");
+        output.push_str(
+            "# HELP myt2abrp_retry_attempts_total Total retry attempts (excludes first attempt)\n",
+        );
         output.push_str("# TYPE myt2abrp_retry_attempts_total counter\n");
         output.push_str(&format!(
             "myt2abrp_retry_attempts_total {}\n\n",
             self.retry_attempts.load(Ordering::Relaxed)
         ));
 
-        output.push_str("# HELP myt2abrp_retry_successes_total Requests that succeeded after retry\n");
+        output.push_str(
+            "# HELP myt2abrp_retry_successes_total Requests that succeeded after retry\n",
+        );
         output.push_str("# TYPE myt2abrp_retry_successes_total counter\n");
         output.push_str(&format!(
             "myt2abrp_retry_successes_total {}\n\n",
             self.retry_successes.load(Ordering::Relaxed)
         ));
 
-        output.push_str("# HELP myt2abrp_retry_exhausted_total Requests that failed after all retries\n");
+        output.push_str(
+            "# HELP myt2abrp_retry_exhausted_total Requests that failed after all retries\n",
+        );
         output.push_str("# TYPE myt2abrp_retry_exhausted_total counter\n");
         output.push_str(&format!(
             "myt2abrp_retry_exhausted_total {}\n\n",
@@ -274,7 +285,7 @@ static METRICS_INSTANCE: OnceLock<Metrics> = OnceLock::new();
 
 /// Get the global metrics instance
 pub fn metrics() -> &'static Metrics {
-    METRICS_INSTANCE.get_or_init(|| Metrics::new())
+    METRICS_INSTANCE.get_or_init(Metrics::new)
 }
 
 // Public alias for easier access

@@ -32,9 +32,9 @@ pub struct CircuitBreakerConfig {
 impl Default for CircuitBreakerConfig {
     fn default() -> Self {
         CircuitBreakerConfig {
-            failure_threshold: 5,      // Open after 5 failures
-            timeout_seconds: 60,        // Wait 60 seconds before retry
-            success_threshold: 2,       // Close after 2 successes
+            failure_threshold: 5, // Open after 5 failures
+            timeout_seconds: 60,  // Wait 60 seconds before retry
+            success_threshold: 2, // Close after 2 successes
         }
     }
 }
@@ -92,7 +92,9 @@ impl CircuitBreaker {
                         "Circuit breaker: OPEN - rejecting request (retry in {} seconds)",
                         remaining
                     );
-                    Err(CircuitBreakerError::Open { retry_after_seconds: remaining })
+                    Err(CircuitBreakerError::Open {
+                        retry_after_seconds: remaining,
+                    })
                 }
             }
             CircuitState::HalfOpen => {
@@ -179,12 +181,14 @@ impl CircuitBreaker {
         }
     }
 
-    /// Get current circuit breaker state
+    /// Get current circuit breaker state (test helper)
+    #[cfg(test)]
     pub fn get_state(&self) -> CircuitState {
         self.state.lock().unwrap().current_state
     }
 
-    /// Get current failure count
+    /// Get current failure count (test helper)
+    #[cfg(test)]
     pub fn get_failure_count(&self) -> u32 {
         self.state.lock().unwrap().failure_count
     }
@@ -199,7 +203,9 @@ pub enum CircuitBreakerError {
 impl std::fmt::Display for CircuitBreakerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CircuitBreakerError::Open { retry_after_seconds } => {
+            CircuitBreakerError::Open {
+                retry_after_seconds,
+            } => {
                 write!(
                     f,
                     "Circuit breaker is OPEN. Service unavailable. Retry after {} seconds.",
