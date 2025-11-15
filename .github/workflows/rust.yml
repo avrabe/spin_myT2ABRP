@@ -86,28 +86,30 @@ jobs:
         run: cargo test --lib --target x86_64-unknown-linux-gnu
 
   codecov-check:
-    name: codecov-check
+    name: codecov-check (llvm-cov)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
       - name: Enable cache
         uses: Swatinem/rust-cache@v2
-      - name: Install cargo-tarpaulin
-        run: cargo install cargo-tarpaulin
-      - name: Run cargo-tarpaulin
-        run: cargo tarpaulin --lib --target x86_64-unknown-linux-gnu --out xml --output-dir . --timeout 120
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov
+      - name: Run tests with coverage
+        run: cargo llvm-cov --lib --target x86_64-unknown-linux-gnu --lcov --output-path lcov.info
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v5.5.1
         with:
           token: ${{secrets.CODECOV_TOKEN}}
-          files: ./cobertura.xml
+          files: ./lcov.info
           fail_ci_if_error: true
 
       - name: Archive code coverage results
         uses: actions/upload-artifact@v5
         with:
           name: code-coverage-report
-          path: cobertura.xml
+          path: lcov.info
