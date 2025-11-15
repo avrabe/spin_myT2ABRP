@@ -57,7 +57,18 @@ This update adds critical production hardening features and complete observabili
   - Cache statistics (hits, misses, hit rate percentage)
   - Authentication metrics (login attempts, failures, active sessions)
   - Rate limiting metrics (rate limit hits)
+  - Circuit breaker metrics (trips to open state)
   - Ready for Grafana dashboards and alerting
+
+- **🔄 Circuit Breaker Pattern** (NEW):
+  - Protects against cascading failures when Toyota API is down
+  - Three-state state machine: Closed → Open → Half-Open
+  - **Failure Threshold**: Opens after 5 consecutive failures
+  - **Timeout**: 60 seconds before retry attempt
+  - **Recovery**: Closes after 2 successful test requests
+  - **Fail Fast**: Rejects requests immediately when open (no wasted timeouts)
+  - Tracks 5xx errors and network failures (4xx client errors don't trigger)
+  - Integrated with metrics and structured logging
 
 - **🧪 Integration Test Framework**:
   - Complete test structure with 7 categories
