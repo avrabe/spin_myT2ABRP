@@ -40,3 +40,14 @@ urlencoding = "2.1"
 myt = { path = "../myt" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+# Testing utilities
+tempfile = "3.0"
+predicates = "3.0"
+# HTTP mocking for integration tests
+wiremock = "0.6"
+# Async testing utilities
+tokio-test = "0.4"
+# Mock time for testing TTL and expiry
+mockall = "0.13"

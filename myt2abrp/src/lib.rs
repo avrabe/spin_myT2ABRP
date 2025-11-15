@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test_helpers;
+
 use base64::{engine::general_purpose, Engine as _};
 use chrono::Utc;
 use hmac::{Hmac, Mac};
@@ -2282,5 +2285,261 @@ mod tests {
         per_user_token.update_access_time(new_time);
 
         assert_eq!(per_user_token.last_accessed, new_time);
+    }
+
+    // ============================================================================
+    // Additional Unit Tests for Coverage
+    // ============================================================================
+
+    #[test]
+    fn test_validate_credentials_success() {
+        let result = validate_credentials("test@example.com", "password123");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_credentials_empty_username() {
+        let result = validate_credentials("", "password123");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("empty"));
+    }
+
+    #[test]
+    fn test_validate_credentials_empty_password() {
+        let result = validate_credentials("test@example.com", "");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("empty"));
+    }
+
+    #[test]
+    fn test_validate_credentials_invalid_email() {
+        let result = validate_credentials("not-an-email", "password123");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("email"));
+    }
+
+    #[test]
+    fn test_validate_credentials_too_long_username() {
+        let long_username = "a".repeat(300) + "@test.com";
+        let result = validate_credentials(&long_username, "password123");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("maximum length"));
+    }
+
+    #[test]
+    fn test_validate_credentials_too_long_password() {
+        let long_password = "a".repeat(300);
+        let result = validate_credentials("test@example.com", &long_password);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("maximum length"));
+    }
+
+    #[test]
+    fn test_get_path_without_query() {
+        assert_eq!(get_path_without_query("/health"), "/health");
+        assert_eq!(get_path_without_query("/api?foo=bar"), "/api");
+        assert_eq!(get_path_without_query("/api?foo=bar&baz=qux"), "/api");
+        assert_eq!(get_path_without_query("/api"), "/api");
+    }
+
+    #[test]
+    fn test_get_query_param() {
+        assert_eq!(
+            get_query_param("/api?vin=TEST123", "vin"),
+            Some("TEST123".to_string())
+        );
+        assert_eq!(
+            get_query_param("/api?foo=bar&vin=TEST123", "vin"),
+            Some("TEST123".to_string())
+        );
+        assert_eq!(get_query_param("/api?foo=bar", "vin"), None);
+        assert_eq!(get_query_param("/api", "vin"), None);
+
+        // Test URL decoding
+        assert_eq!(
+            get_query_param("/api?name=John%20Doe", "name"),
+            Some("John Doe".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_iso8601_to_timestamp() {
+        let timestamp = parse_iso8601_to_timestamp("2025-01-15T12:00:00Z");
+        assert!(timestamp > 0);
+
+        // Test with valid RFC3339 format
+        let timestamp2 = parse_iso8601_to_timestamp("2025-01-15T12:00:00+00:00");
+        assert!(timestamp2 > 0);
+
+        // Invalid format should still return current time (not crash)
+        let timestamp3 = parse_iso8601_to_timestamp("invalid-date");
+        assert!(timestamp3 > 0);
+    }
+
+    #[test]
+    fn test_cached_vehicle_data_expiry() {
+        let current_time = 1000;
+        let data = CachedVehicleData::new(
+            "{\"test\": \"data\"}".to_string(),
+            current_time,
+            300, // 5 minutes TTL
+        );
+
+        // Should not be expired immediately
+        assert!(!data.is_expired(current_time));
+
+        // Should not be expired within TTL
+        assert!(!data.is_expired(current_time + 250));
+
+        // Should be expired after TTL
+        assert!(data.is_expired(current_time + 301));
+    }
+
+    #[test]
+    fn test_cached_vehicle_data_getters() {
+        let current_time = 1000;
+        let test_data = "{\"soc\": 85}".to_string();
+        let data = CachedVehicleData::new(test_data.clone(), current_time, 300);
+
+        assert_eq!(data.data, test_data);
+        assert_eq!(data.cached_at, current_time);
+        assert_eq!(data.ttl_seconds, 300);
+    }
+
+    #[test]
+    fn test_abrp_telemetry_serialization() {
+        let abrp = AbrpTelemetry {
+            utc: 1736942400,
+            soc: 85.5,
+            lat: Some(52.5200),
+            lon: Some(13.4050),
+            is_charging: Some(true),
+            is_parked: Some(false),
+            odometer: Some(15234.5),
+            est_battery_range: Some(250.5),
+            version: VERSION.to_string(),
+        };
+
+        let json = serde_json::to_string(&abrp).unwrap();
+        assert!(json.contains("\"soc\":85.5"));
+        assert!(json.contains("\"lat\":52.52"));
+        assert!(json.contains("\"is_charging\":true"));
+    }
+
+    #[test]
+    fn test_abrp_telemetry_with_optional_fields_none() {
+        let abrp = AbrpTelemetry {
+            utc: 1736942400,
+            soc: 75.0,
+            lat: None,
+            lon: None,
+            is_charging: None,
+            is_parked: None,
+            odometer: None,
+            est_battery_range: None,
+            version: VERSION.to_string(),
+        };
+
+        let json = serde_json::to_string(&abrp).unwrap();
+        // Optional fields should not be serialized when None
+        assert!(!json.contains("\"lat\""));
+        assert!(!json.contains("\"is_charging\""));
+        assert!(json.contains("\"soc\":75"));
+    }
+
+    #[test]
+    fn test_health_status_serialization() {
+        let health = HealthStatus {
+            status: "healthy".to_string(),
+            version: VERSION.to_string(),
+            kv_store: Some("ok".to_string()),
+            uptime_seconds: Some(3600),
+        };
+
+        let json = serde_json::to_string(&health).unwrap();
+        assert!(json.contains("\"status\":\"healthy\""));
+        assert!(json.contains("\"kv_store\":\"ok\""));
+        assert!(json.contains("\"uptime_seconds\":3600"));
+    }
+
+    #[test]
+    fn test_login_response_serialization() {
+        let response = LoginResponse {
+            access_token: "test-access-token".to_string(),
+            refresh_token: "test-refresh-token".to_string(),
+            token_type: "Bearer".to_string(),
+            expires_in: 900,
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"access_token\":\"test-access-token\""));
+        assert!(json.contains("\"token_type\":\"Bearer\""));
+        assert!(json.contains("\"expires_in\":900"));
+    }
+
+    #[test]
+    fn test_claims_serialization() {
+        let claims = Claims {
+            sub: "test@example.com".to_string(),
+            exp: 1736942400 + 900,
+            iat: 1736942400,
+            jti: "test-jti-123".to_string(),
+            token_type: "access".to_string(),
+        };
+
+        let json = serde_json::to_string(&claims).unwrap();
+        assert!(json.contains("\"sub\":\"test@example.com\""));
+        assert!(json.contains("\"token_type\":\"access\""));
+        assert!(json.contains("\"jti\":\"test-jti-123\""));
+    }
+
+    #[test]
+    fn test_session_struct() {
+        let session = Session {
+            session_id: "session-123".to_string(),
+            username: "test@example.com".to_string(),
+            created_at: 1000,
+            last_accessed: 1000,
+            ip_address: Some("127.0.0.1".to_string()),
+            user_agent: Some("Mozilla/5.0".to_string()),
+        };
+
+        assert_eq!(session.session_id, "session-123");
+        assert_eq!(session.username, "test@example.com");
+        assert_eq!(session.created_at, 1000);
+    }
+
+    #[test]
+    fn test_rate_limit_info_serialization() {
+        let rate_limit = RateLimitInfo {
+            count: 10,
+            window_start: 1000,
+            lockout_until: Some(2000),
+        };
+
+        let json = serde_json::to_string(&rate_limit).unwrap();
+        let deserialized: RateLimitInfo = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.count, 10);
+        assert_eq!(deserialized.window_start, 1000);
+        assert_eq!(deserialized.lockout_until, Some(2000));
+    }
+
+    #[test]
+    fn test_constant_values() {
+        // Verify critical constants are set correctly
+        assert_eq!(JWT_ACCESS_TOKEN_EXPIRY, 900); // 15 minutes
+        assert_eq!(JWT_REFRESH_TOKEN_EXPIRY, 604800); // 7 days
+        assert_eq!(JWT_ALGORITHM, Algorithm::HS256);
+
+        assert_eq!(TOKEN_TTL_SECONDS, 3600); // 1 hour
+        assert_eq!(VEHICLE_DATA_TTL_SECONDS, 300); // 5 minutes
+
+        assert_eq!(RATE_LIMIT_PER_USER_HOUR, 100);
+        assert_eq!(RATE_LIMIT_LOGIN_ATTEMPTS, 5);
+        assert_eq!(RATE_LIMIT_LOGIN_LOCKOUT_SECONDS, 900); // 15 minutes
+
+        assert_eq!(MAX_USERNAME_LENGTH, 256);
+        assert_eq!(MAX_PASSWORD_LENGTH, 256);
     }
 }
