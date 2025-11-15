@@ -181,13 +181,19 @@ fn test_token_expiry_values() {
 
     // Access token should expire in ~15 minutes (900 seconds)
     let access_lifetime = access_claims.exp - access_claims.iat;
-    assert!(access_lifetime >= 895 && access_lifetime <= 905,
-            "Access token lifetime should be ~900 seconds, got {}", access_lifetime);
+    assert!(
+        access_lifetime >= 895 && access_lifetime <= 905,
+        "Access token lifetime should be ~900 seconds, got {}",
+        access_lifetime
+    );
 
     // Refresh token should expire in ~7 days (604800 seconds)
     let refresh_lifetime = refresh_claims.exp - refresh_claims.iat;
-    assert!(refresh_lifetime >= 604790 && refresh_lifetime <= 604810,
-            "Refresh token lifetime should be ~604800 seconds, got {}", refresh_lifetime);
+    assert!(
+        refresh_lifetime >= 604790 && refresh_lifetime <= 604810,
+        "Refresh token lifetime should be ~604800 seconds, got {}",
+        refresh_lifetime
+    );
 
     cleanup_test_env();
 }
@@ -285,7 +291,10 @@ fn test_get_cors_origin() {
 #[test]
 #[serial]
 fn test_config_getters_with_valid_env() {
-    env::set_var("JWT_SECRET", "valid-jwt-secret-that-is-long-enough-32bytes!");
+    env::set_var(
+        "JWT_SECRET",
+        "valid-jwt-secret-that-is-long-enough-32bytes!",
+    );
     env::set_var("HMAC_KEY", "valid-hmac-key-that-is-long-enough-32bytes!");
     env::set_var("CORS_ORIGIN", "https://example.com");
 
