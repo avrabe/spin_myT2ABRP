@@ -23,6 +23,8 @@ jobs:
           target: wasm32-wasip1
       - name: Enable cache
         uses: Swatinem/rust-cache@v2
+      - name: Install cargo-audit (modern version for Cargo.lock v4)
+        run: cargo install cargo-audit --version 0.22.0
       - run: cargo install cargo-checkmate
       - run: cargo checkmate run audit
       - run: cargo checkmate run build
