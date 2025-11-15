@@ -1,0 +1,27 @@
+[package]
+name = "toyota-api-types"
+version = "0.1.0"
+edition = "2021"
+description = "Pure data models for Toyota Connected Services APIs"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen-rt = { version = "0.41.0", features = ["bitflags"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_path_to_error = "0.1"
+
+[package.metadata.component]
+package = "toyota:api-types"
+
+[package.metadata.component.target]
+path = "wit"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true

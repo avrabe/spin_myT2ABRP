@@ -8,6 +8,7 @@ members = [
     "components/circuit-breaker",
     "components/gateway",
     "components/metrics",
+    "components/toyota-api-types",
 ]
 
 
