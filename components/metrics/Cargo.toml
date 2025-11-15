@@ -1,0 +1,22 @@
+[package]
+name = "toyota-metrics"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen-rt = { version = "0.41.0", features = ["bitflags"] }
+
+[package.metadata.component]
+package = "toyota:metrics"
+
+[package.metadata.component.target]
+path = "wit"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
