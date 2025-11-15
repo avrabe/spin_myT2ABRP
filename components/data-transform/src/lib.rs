@@ -124,12 +124,12 @@ fn toyota_to_abrp_internal(
         .map_err(|e| format!("Failed to parse electric status: {}", e))?;
 
     // Parse location (optional)
-    let location: Option<LocationResponse> = location_json
-        .and_then(|json| serde_json::from_str(json).ok());
+    let location: Option<LocationResponse> =
+        location_json.and_then(|json| serde_json::from_str(json).ok());
 
     // Parse telemetry (optional)
-    let telemetry: Option<TelemetryResponse> = telemetry_json
-        .and_then(|json| serde_json::from_str(json).ok());
+    let telemetry: Option<TelemetryResponse> =
+        telemetry_json.and_then(|json| serde_json::from_str(json).ok());
 
     // Extract charge info
     let charge_info = &electric_status.payload.vehicle_info.charge_info;
@@ -478,6 +478,8 @@ mod tests {
     fn test_toyota_to_abrp_invalid_json() {
         let result = toyota_to_abrp_internal("invalid json", None, None, "1.0.0");
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Failed to parse electric status"));
+        assert!(result
+            .unwrap_err()
+            .contains("Failed to parse electric status"));
     }
 }

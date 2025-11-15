@@ -43,12 +43,9 @@ impl Guest for Component {
         validation.validate_nbf = false;
         validation.required_spec_claims.clear();
 
-        let token_data = decode::<JwtClaims>(
-            &token,
-            &DecodingKey::from_secret(&jwt_secret),
-            &validation,
-        )
-        .map_err(|e| format!("Failed to decode token: {}", e))?;
+        let token_data =
+            decode::<JwtClaims>(&token, &DecodingKey::from_secret(&jwt_secret), &validation)
+                .map_err(|e| format!("Failed to decode token: {}", e))?;
 
         Ok(Claims {
             sub: token_data.claims.sub,
@@ -62,8 +59,7 @@ impl Guest for Component {
     fn hash_username(username: String, hmac_key: Vec<u8>) -> String {
         type HmacSha256 = Hmac<Sha256>;
 
-        let mut mac = HmacSha256::new_from_slice(&hmac_key)
-            .expect("HMAC can take key of any size");
+        let mut mac = HmacSha256::new_from_slice(&hmac_key).expect("HMAC can take key of any size");
         mac.update(username.as_bytes());
         let result = mac.finalize();
         hex::encode(result.into_bytes())
@@ -94,8 +90,7 @@ fn generate_token(
     let header = Header::new(JWT_ALGORITHM);
     let encoding_key = EncodingKey::from_secret(jwt_secret);
 
-    encode(&header, &claims, &encoding_key)
-        .map_err(|e| format!("Failed to encode JWT: {}", e))
+    encode(&header, &claims, &encoding_key).map_err(|e| format!("Failed to encode JWT: {}", e))
 }
 
 fn get_current_timestamp() -> i64 {
@@ -117,11 +112,8 @@ mod tests {
 
     #[test]
     fn test_generate_access_token() {
-        let token = Component::generate_access_token(
-            "testuser".to_string(),
-            TEST_SECRET.to_vec(),
-        )
-        .expect("Should generate token");
+        let token = Component::generate_access_token("testuser".to_string(), TEST_SECRET.to_vec())
+            .expect("Should generate token");
 
         assert!(!token.is_empty());
         assert!(token.starts_with("eyJ")); // JWT header base64
@@ -129,11 +121,8 @@ mod tests {
 
     #[test]
     fn test_generate_refresh_token() {
-        let token = Component::generate_refresh_token(
-            "testuser".to_string(),
-            TEST_SECRET.to_vec(),
-        )
-        .expect("Should generate token");
+        let token = Component::generate_refresh_token("testuser".to_string(), TEST_SECRET.to_vec())
+            .expect("Should generate token");
 
         assert!(!token.is_empty());
         assert!(token.starts_with("eyJ"));
@@ -141,14 +130,11 @@ mod tests {
 
     #[test]
     fn test_verify_valid_token() {
-        let token = Component::generate_access_token(
-            "testuser".to_string(),
-            TEST_SECRET.to_vec(),
-        )
-        .expect("Should generate token");
+        let token = Component::generate_access_token("testuser".to_string(), TEST_SECRET.to_vec())
+            .expect("Should generate token");
 
-        let claims = Component::verify_token(token, TEST_SECRET.to_vec())
-            .expect("Should verify token");
+        let claims =
+            Component::verify_token(token, TEST_SECRET.to_vec()).expect("Should verify token");
 
         assert_eq!(claims.sub, "testuser");
         assert_eq!(claims.token_type, "access");
@@ -157,21 +143,16 @@ mod tests {
 
     #[test]
     fn test_verify_invalid_token() {
-        let result = Component::verify_token(
-            "invalid.token.here".to_string(),
-            TEST_SECRET.to_vec(),
-        );
+        let result =
+            Component::verify_token("invalid.token.here".to_string(), TEST_SECRET.to_vec());
 
         assert!(result.is_err());
     }
 
     #[test]
     fn test_verify_token_wrong_secret() {
-        let token = Component::generate_access_token(
-            "testuser".to_string(),
-            TEST_SECRET.to_vec(),
-        )
-        .expect("Should generate token");
+        let token = Component::generate_access_token("testuser".to_string(), TEST_SECRET.to_vec())
+            .expect("Should generate token");
 
         let wrong_secret = b"wrong-secret";
         let result = Component::verify_token(token, wrong_secret.to_vec());
@@ -195,17 +176,12 @@ mod tests {
 
     #[test]
     fn test_access_and_refresh_tokens_different() {
-        let access = Component::generate_access_token(
-            "testuser".to_string(),
-            TEST_SECRET.to_vec(),
-        )
-        .expect("Should generate access token");
+        let access = Component::generate_access_token("testuser".to_string(), TEST_SECRET.to_vec())
+            .expect("Should generate access token");
 
-        let refresh = Component::generate_refresh_token(
-            "testuser".to_string(),
-            TEST_SECRET.to_vec(),
-        )
-        .expect("Should generate refresh token");
+        let refresh =
+            Component::generate_refresh_token("testuser".to_string(), TEST_SECRET.to_vec())
+                .expect("Should generate refresh token");
 
         // Tokens should be different
         assert_ne!(access, refresh);
