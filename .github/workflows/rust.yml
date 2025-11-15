@@ -10,8 +10,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  cargo-checkmate:
-    name: cargo-checkmate
+  pre-commit:
+    name: pre-commit checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -21,24 +21,26 @@ jobs:
           toolchain: stable
           override: true
           target: wasm32-wasip1
+          components: clippy, rustfmt
       - name: Enable cache
         uses: Swatinem/rust-cache@v2
       - name: Install cargo-audit (modern version for Cargo.lock v4)
         run: cargo install cargo-audit --version 0.22.0
-      - run: cargo install cargo-checkmate
-      - run: cargo checkmate run audit
-      - run: cargo checkmate run build
-      - run: cargo checkmate run check
-      - run: cargo checkmate run clippy
-      - run: cargo checkmate run format
-      - run: cargo checkmate run doc
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install pre-commit
+        run: pip install pre-commit
+      - name: Run pre-commit hooks
+        run: pre-commit run --all-files
 
   semver-check:
     runs-on: ubuntu-latest
-    steps:   
+    steps:
       - uses: actions/checkout@v5
       - name: Check semver
-        uses: obi1kenobi/cargo-semver-checks-action@v2      
+        uses: obi1kenobi/cargo-semver-checks-action@v2
     # Until it is running, keep it as is
     continue-on-error: true
 

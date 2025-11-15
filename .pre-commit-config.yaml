@@ -1,0 +1,81 @@
+# Pre-commit hooks for Rust project
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        exclude: '\.md$'
+
+  # Rust-specific checks using doublify/pre-commit-rust
+  - repo: https://github.com/doublify/pre-commit-rust
+    rev: v1.0
+    hooks:
+      # Check formatting (fast, should always pass)
+      - id: fmt
+        name: cargo fmt
+        args: ['--all', '--', '--check']
+
+      # Run clippy for linting
+      - id: clippy
+        name: cargo clippy
+        args: ['--all-features', '--', '-D', 'warnings']
+
+  # Local hooks for commands that need specific setup
+  - repo: local
+    hooks:
+      # Cargo audit with modern version supporting Cargo.lock v4
+      - id: cargo-audit
+        name: cargo audit (security vulnerabilities)
+        entry: cargo
+        args: ['audit']
+        language: system
+        pass_filenames: false
+        files: 'Cargo\.(toml|lock)$'
+        stages: [pre-commit]
+
+      # Cargo check (lighter than full build)
+      - id: cargo-check
+        name: cargo check
+        entry: cargo
+        args: ['check', '--all-features']
+        language: system
+        pass_filenames: false
+        files: '\.(rs|toml)$'
+        stages: [pre-push]
+
+      # Full build (only run manually or in CI)
+      - id: cargo-build
+        name: cargo build
+        entry: cargo
+        args: ['build', '--all-features']
+        language: system
+        pass_filenames: false
+        files: '\.(rs|toml)$'
+        stages: [manual]
+
+      # Documentation check (only run manually or in CI)
+      - id: cargo-doc
+        name: cargo doc
+        entry: cargo
+        args: ['doc', '--no-deps', '--all-features']
+        language: system
+        pass_filenames: false
+        files: '\.(rs|toml)$'
+        stages: [manual]
+
+      # Run tests (only run manually or in CI)
+      - id: cargo-test
+        name: cargo test
+        entry: cargo
+        args: ['test', '--lib', '--target', 'x86_64-unknown-linux-gnu']
+        language: system
+        pass_filenames: false
+        files: '\.(rs|toml)$'
+        stages: [manual]
