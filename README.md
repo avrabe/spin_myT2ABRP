@@ -1,136 +1,270 @@
-<div align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./docs/static/image/logo-dark.png">
-    <img alt="spin logo" src="./docs/static/image/logo.png" width="300" height="128">
-  </picture>
-  <p>Spin is a framework for building, deploying, and running fast, secure, and composable cloud microservices with WebAssembly.</p>
-      <a href="https://github.com/spinframework/spin/actions/workflows/build.yml"><img src="https://github.com/spinframework/spin/actions/workflows/build.yml/badge.svg" alt="build status" /></a>
-      <a href="https://cloud-native.slack.com/archives/C089NJ9G1V0"><img alt="Slack" src="https://img.shields.io/badge/slack-spin-green.svg?logo=slack"></a>
-      <a href="https://www.bestpractices.dev/projects/10373"><img src="https://www.bestpractices.dev/projects/10373/badge"></a>
-</div>
+# Toyota MyT to ABRP Gateway
 
-## What is Spin?
+WebAssembly-based gateway service that bridges Toyota Connected Services Europe (MyToyota) with A Better Route Planner (ABRP) for electric vehicle telemetry data.
 
-Spin is an open source framework for building and running fast, secure, and
-composable cloud microservices with WebAssembly. It aims to be the easiest way
-to get started with WebAssembly microservices, and takes advantage of the latest
-developments in the
-[WebAssembly component model](https://github.com/WebAssembly/component-model)
-and [Wasmtime](https://wasmtime.dev/) runtime.
+## Overview
 
-Spin offers a simple CLI that helps you create, distribute, and execute
-applications, and in the next sections we will learn more about Spin
-applications and how to get started.
+This project provides a component-based architecture built with WebAssembly Component Model, enabling:
 
-## Getting started
+- **Toyota API Integration**: Authenticate and fetch vehicle data from Toyota Connected Services
+- **ABRP Telemetry**: Transform Toyota data into ABRP-compatible telemetry format
+- **Component Architecture**: 8 independent WASM components (7 pure WASI, 1 Spin gateway)
+- **Production Ready**: JWT authentication, circuit breaker, metrics, retry logic, validation
 
-See the [Install Spin](https://spinframework.dev/install) page of the [Spin documentation](https://spinframework.dev) for a detailed
-guide on installing and configuring Spin, but in short run the following commands:
-```bash
-curl -fsSL https://spinframework.dev/downloads/install.sh | bash
-sudo mv ./spin /usr/local/bin/spin
+## Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│  Gateway (Spin HTTP Component)              │
+│  - Authentication & session management      │
+│  - Toyota API integration                   │
+│  - ABRP telemetry endpoint                  │
+│  - KV store for caching                     │
+└────────────┬────────────────────────────────┘
+             │ imports (via WAC)
+             ↓
+┌─────────────────────────────────────────────┐
+│  Pure WASI Components (7 components)        │
+├─────────────────────────────────────────────┤
+│  business-logic   │ JWT operations          │
+│  circuit-breaker  │ Resilience pattern      │
+│  data-transform   │ Toyota → ABRP           │
+│  metrics          │ Prometheus metrics      │
+│  retry-logic      │ Exponential backoff     │
+│  toyota-api-types │ API data models         │
+│  validation       │ Input validation        │
+└─────────────────────────────────────────────┘
 ```
 
-Alternatively, you could [build Spin from source](https://spinframework.dev/contributing-spin).
+## Components
 
-To get started writing apps, follow the [quickstart guide](https://spinframework.dev/quickstart/),
-and then follow the
-[Rust](https://spinframework.dev/rust-components/), [JavaScript](https://spinframework.dev/javascript-components), [Python](https://spinframework.dev/python-components), or [Go](https://spinframework.dev/go-components/)
-language guides, and the [guide on writing Spin applications](https://spinframework.dev/writing-apps/).
+See [components/README.md](components/README.md) for detailed component documentation.
 
-## Language support
+**Statistics**:
+- 8 total components
+- 1,892 lines of code
+- 54/54 tests passing
+- 1.2 MB total size
 
-WebAssembly is a language-agnostic runtime: you can build WebAssembly components from a variety of source languages. Spin SDKs are available for several languages, including:
+## Quick Start
 
-* JavaScript: https://github.com/spinframework/spin-js-sdk
-* Rust: https://crates.io/crates/spin-sdk
-* Go: https://pkg.go.dev/github.com/fermyon/spin/sdk/go/v2
-* Python: https://github.com/spinframework/spin-python-sdk
-* Zig: https://github.com/dasimmet/zig-spin (third party)
-* Moonbit: https://github.com/gmlewis/spin-moonbit-sdk (third party)
+### Prerequisites
 
-> The Spin framework team supports the JavaScript, Rust, Go, and Python SDKs. Other language integrations are supported by their authors, and we're grateful to them for their work!
-
-## Usage
-
-Below is an example of using the `spin` CLI to create a new Spin application.  To run the example you will need to install the `wasm32-wasip1` target for Rust.
+- [Rust](https://rustup.rs/) (latest stable)
+- [cargo-component](https://github.com/bytecodealliance/cargo-component)
+- [Spin CLI](https://developer.fermyon.com/spin/install)
 
 ```bash
-$ rustup target add wasm32-wasip1
+# Install cargo-component
+cargo install cargo-component
+
+# Install Spin
+curl -fsSL https://developer.fermyon.com/downloads/install.sh | bash
 ```
 
-First, run the `spin new` command to create a Spin application from a template.
-```bash
-# Create a new Spin application named 'hello-rust' based on the Rust http template, accepting all defaults
-$ spin new --accept-defaults -t http-rust hello-rust
-```
-Running the `spin new` command created a `hello-rust` directory with all the necessary files for your application. Change to the `hello-rust` directory and build the application with `spin build`, then run it locally with `spin up`:
-
-```bash
-# Compile to Wasm by executing the `build` command.
-$ spin build
-Executing the build command for component hello-rust: cargo build --target wasm32-wasip1 --release
-    Finished release [optimized] target(s) in 0.03s
-Successfully ran the build command for the Spin components.
-
-# Run the application locally.
-$ spin up
-Logging component stdio to ".spin/logs/"
-
-Serving http://127.0.0.1:3000
-Available Routes:
-  hello-rust: http://127.0.0.1:3000 (wildcard)
-```
-
-That's it! Now that the application is running, use your browser or cURL in another shell to try it out:
+### Building
 
 ```bash
-# Send a request to the application.
-$ curl -i 127.0.0.1:3000
-HTTP/1.1 200 OK
-content-type: text/plain
-transfer-encoding: chunked
-date: Sun, 02 Mar 2025 20:09:11 GMT
+# Build all components
+cargo component build --release
 
-Hello World!
+# Or build with Bazel (hermetic builds)
+bazel build //components/...
 ```
 
-You can make the app do more by editting the `src/lib.rs` file in the `hello-rust` directory using your favorite editor or IDE. To learn more about writing Spin applications see [Writing Applications](https://spinframework.dev/writing-apps) in the Spin documentation.  To learn how to publish and distribute your application see the [Publishing and Distribution](https://spinframework.dev/distributing-apps) guide in the Spin documentation.
+### Running
 
-## Language Support for Spin Features
+```bash
+# Start the gateway
+cd components/gateway
+spin up
 
-The table below summarizes the [feature support](https://spinframework.dev/language-support-overview) in each of the language SDKs.
+# The gateway will be available at http://localhost:3000
+```
 
-| Feature | Rust SDK Supported? | TypeScript SDK Supported? | Python SDK Supported? | Tiny Go SDK Supported? | C# SDK Supported? |
-|-----|-----|-----|-----|-----|-----|
-| **Triggers** |
-| [HTTP](https://spinframework.dev/http-trigger) | Supported | Supported | Supported | Supported | Supported |
-| [Redis](https://spinframework.dev/redis-trigger) | Supported | Supported | Supported | Supported | Not Supported |
-| **APIs** |
-| [Outbound HTTP](https://spinframework.dev/rust-components.md#sending-outbound-http-requests) | Supported | Supported | Supported | Supported | Supported |
-| [Configuration Variables](https://spinframework.dev/variables) | Supported | Supported | Supported | Supported | Supported |
-| [Key Value Storage](https://spinframework.dev/kv-store-api-guide) | Supported | Supported | Supported | Supported | Not Supported |
-| [SQLite Storage](https://spinframework.dev/sqlite-api-guide) | Supported | Supported | Supported | Supported | Not Supported |
-| [MySQL](https://spinframework.dev/rdbms-storage#using-mysql-and-postgresql-from-applications) | Supported | Supported | Not Supported | Supported | Not Supported |
-| [PostgreSQL](https://spinframework.dev/rdbms-storage#using-mysql-and-postgresql-from-applications) | Supported | Supported | Not Supported | Supported | Supported |
-| [Outbound Redis](https://spinframework.dev/rust-components.md#storing-data-in-redis-from-rust-components) | Supported | Supported | Supported | Supported | Supported |
-| [Serverless AI](https://spinframework.dev/serverless-ai-api-guide) | Supported | Supported | Supported | Supported | Not Supported |
-| **Extensibility** |
-| [Authoring Custom Triggers](https://spinframework.dev/extending-and-embedding) | Supported | Not Supported | Not Supported | Not Supported | Not Supported |
+## API Endpoints
 
-## Getting Involved and Contributing
+### Authentication
 
-We are delighted that you are interested in making Spin better! Thank you!
+```bash
+# Login
+POST /api/login
+Content-Type: application/json
+{
+  "username": "user@example.com",
+  "password": "your-password"
+}
 
-Each Monday at 2:30pm UTC (odd weeks) and 9:00pm UTC (even weeks), we meet to discuss Spin issues, roadmap, and ideas in our Spin Project Meetings. Link to the meeting can be found in the Spin Project Meeting agenda below.
+# Response
+{
+  "access_token": "eyJ...",
+  "refresh_token": "eyJ...",
+  "token_type": "Bearer",
+  "expires_in": 3600
+}
+```
 
-The [Spin Project Meeting agenda](https://docs.google.com/document/d/1EG392gb8Eg-1ZEPDy18pgFZvMMrdAEybpCSufFXoe00/edit?usp=sharing) is a public document. The document contains a rolling agenda with the date and time of each meeting, the Zoom link, and topics of discussion for the day. You will also find the meeting minutes for each meeting and the link to the recording. If you have something you would like to demo or discuss at the project meeting, we encourage you to add it to the agenda.
+### Telemetry
 
-You can find the contributing guide [here](https://spinframework.dev/contributing-spin).
+```bash
+# Get ABRP telemetry
+GET /abrp?token=<your_token>&vin=<vehicle_vin>
+Authorization: Bearer <access_token>
 
-## Stay in Touch
+# Response
+{
+  "utc": 1736942400,
+  "soc": 85.0,
+  "lat": 52.520008,
+  "lon": 13.404954,
+  "is_charging": true,
+  "odometer": 15000.0,
+  "est_battery_range": 250.5,
+  "version": "1.0.0"
+}
+```
 
-Follow us on Twitter: [@spinframework](https://twitter.com/spinframework)
+### Health Check
 
-You can join the Spin community in the [Spin CNCF Slack channel](https://cloud-native.slack.com/archives/C089NJ9G1V0) where you can ask questions, get help, and show off the cool things you are doing with Spin!
+```bash
+# Check gateway health
+GET /health
 
+# Response
+{
+  "status": "healthy",
+  "message": "Gateway component builds successfully"
+}
+```
+
+## Development
+
+### Project Structure
+
+```
+.
+├── components/           # WebAssembly components
+│   ├── business-logic/   # JWT operations
+│   ├── circuit-breaker/  # Resilience pattern
+│   ├── data-transform/   # Toyota → ABRP transformation
+│   ├── gateway/          # Spin HTTP gateway
+│   ├── metrics/          # Prometheus metrics
+│   ├── retry-logic/      # Retry strategy
+│   ├── toyota-api-types/ # Toyota API data models
+│   └── validation/       # Input validation
+├── myt2abrp/             # Main gateway application
+├── myt/                  # Toyota API client library
+├── bazel-build.md        # Bazel build instructions
+└── README.md             # This file
+```
+
+### Testing
+
+```bash
+# Run all tests (native target - faster)
+cargo test --workspace --target x86_64-unknown-linux-gnu
+
+# Run specific component tests
+cargo test --package toyota-validation --target x86_64-unknown-linux-gnu
+
+# Run with Bazel
+bazel test //components/...
+```
+
+### Building with Bazel
+
+See [bazel-build.md](bazel-build.md) for detailed Bazel instructions.
+
+```bash
+# Install Bazel (via Bazelisk)
+npm install -g @bazel/bazelisk
+
+# Build all components
+bazel build //components/...
+
+# Run tests
+bazel test //components/...
+```
+
+## Configuration
+
+Gateway configuration via Spin variables:
+
+```toml
+# spin.toml
+[component.gateway.variables]
+jwt_secret = { required = true }
+cors_origin = { default = "*" }
+```
+
+Set variables:
+
+```bash
+# Set JWT secret
+spin variables set jwt_secret "your-secret-key"
+```
+
+## Deployment
+
+### Deploy to Fermyon Cloud
+
+```bash
+# Login to Fermyon Cloud
+spin login
+
+# Deploy
+spin deploy
+```
+
+### Deploy to Kubernetes (with SpinKube)
+
+```bash
+# Build and push
+spin build
+spin registry push ghcr.io/your-org/toyota-gateway:latest
+
+# Deploy with SpinKube
+kubectl apply -f k8s/deployment.yaml
+```
+
+## Monitoring
+
+Prometheus metrics available at `/metrics`:
+
+- `total_requests` - Total HTTP requests
+- `total_errors` - Total errors
+- `cache_hits` / `cache_misses` - Cache statistics
+- `jwt_generations` / `jwt_verifications` - JWT operations
+- `circuit_breaker_opens` / `circuit_breaker_closes` - Circuit breaker state changes
+- `retry_attempts` / `retry_success` / `retry_exhausted` - Retry statistics
+
+## License
+
+Apache 2.0 - See [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+This is an internal project. For questions or issues, please contact the development team.
+
+## Technical Details
+
+### WebAssembly Component Model
+
+All components use the [WebAssembly Component Model](https://github.com/WebAssembly/component-model) with WIT (WebAssembly Interface Types) for strong typing and composition.
+
+### Spin Framework
+
+The gateway runs on [Spin](https://www.fermyon.com/spin), a serverless WebAssembly application framework.
+
+### Zero Dependencies
+
+7 out of 8 components have **zero dependencies** on Spin SDK, making them:
+- Reusable across any WASM runtime
+- Testable on native targets (faster development)
+- Portable to other platforms
+
+### Build Systems
+
+- **Cargo Component**: Primary development tool
+- **Bazel**: Hermetic, reproducible CI/CD builds
+- Both build the same artifacts with identical WIT interfaces
