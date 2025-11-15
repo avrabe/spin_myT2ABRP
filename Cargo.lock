@@ -2002,6 +2002,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "toyota-circuit-breaker"
+version = "0.1.0"
+dependencies = [
+ "wit-bindgen-rt 0.41.0",
+]
+
+[[package]]
 name = "tracing"
 version = "0.1.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2453,6 +2460,15 @@ name = "wit-bindgen-rt"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b0780cf7046630ed70f689a098cd8d56c5c3b22f2a7379bbdb088879963ff96"
+dependencies = [
+ "bitflags",
+]
+
+[[package]]
+name = "wit-bindgen-rt"
+version = "0.41.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4db52a11d4dfb0a59f194c064055794ee6564eb1ced88c25da2cf76e50c5621"
 dependencies = [
  "bitflags",
 ]

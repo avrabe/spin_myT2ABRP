@@ -5,6 +5,7 @@ members = [
     "myt2abrp",
     "myt",
     "components/business-logic",
+    "components/circuit-breaker",
 ]
 
 

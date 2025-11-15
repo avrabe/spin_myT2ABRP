@@ -1,0 +1,53 @@
+package toyota:circuit-breaker@0.1.0;
+
+/// Circuit breaker pattern for resilient API calls
+///
+/// Protects against cascading failures when downstream services are unavailable.
+/// Implements the classic three-state circuit breaker: Closed → Open → Half-Open
+interface breaker {
+    /// Circuit breaker states
+    enum circuit-state {
+        /// Normal operation - requests are allowed
+        closed,
+        /// Too many failures - requests fail fast without trying
+        open,
+        /// Testing if service recovered - limited requests allowed
+        half-open,
+    }
+
+    /// Configuration for circuit breaker behavior
+    record config {
+        /// Number of consecutive failures before opening circuit
+        failure-threshold: u32,
+        /// Seconds to wait before attempting half-open
+        timeout-seconds: u64,
+        /// Number of consecutive successes needed to close circuit from half-open
+        success-threshold: u32,
+    }
+
+    /// Error when circuit breaker is open
+    record breaker-error {
+        /// Seconds until retry is allowed
+        retry-after-seconds: u64,
+    }
+
+    /// Check if a request should be allowed through the circuit breaker
+    /// Returns error with retry-after if circuit is open
+    can-attempt: func() -> result<_, breaker-error>;
+
+    /// Record a successful call
+    record-success: func();
+
+    /// Record a failed call
+    record-failure: func();
+
+    /// Get current circuit breaker state (for monitoring)
+    get-state: func() -> circuit-state;
+
+    /// Get current failure count (for monitoring)
+    get-failure-count: func() -> u32;
+}
+
+world circuit-breaker {
+    export breaker;
+}
