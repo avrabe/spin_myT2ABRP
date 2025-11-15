@@ -24,15 +24,15 @@ route = "/..."
 component = "myt2abrp"
 
 [component.myt2abrp]
-source = "target/wasm32-wasip1/release/myt2abrp.wasm"
+source = "bazel-bin/myt2abrp_app.wasm"
 allowed_outbound_hosts = [
     "https://b2c-login.toyota-europe.com",
     "https://ctpa-oneapi.tceu-ctp-prd.toyotaconnectedeurope.io"
 ]
 key_value_stores = ["default"]
 [component.myt2abrp.build]
-command = "cargo build --target wasm32-wasip1 --release"
-watch = ["myt2abrp/src/**/*.rs", "myt2abrp/Cargo.toml", "Cargo.toml", "myt/src/**/*.rs", "myt/Cargo.toml"]
+command = "./build.sh"
+watch = ["components/**/src/**/*.rs", "components/**/wit/**/*.wit", "BUILD.bazel", "components/**/BUILD.bazel", "build.sh"]
 [component.myt2abrp.variables]
 jwt_secret = "{{ jwt_secret }}"
 hmac_key = "{{ hmac_key }}"

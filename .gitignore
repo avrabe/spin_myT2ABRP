@@ -4,3 +4,6 @@
 target/
 crt.pem
 spin.sig
+
+# Bazel outputs
+bazel-*
