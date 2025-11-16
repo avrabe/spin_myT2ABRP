@@ -1,0 +1,81 @@
+<testsuites id="" name="" tests="17" failures="1" skipped="0" errors="0" time="15.545677999999999">
+<testsuite name="api.spec.js" timestamp="2025-11-16T21:41:03.262Z" hostname="api-tests" tests="13" failures="1" skipped="0" time="0.272" errors="0">
+<testcase name="Toyota MyT2ABRP API Tests › Health &amp; Status Endpoints › should respond to health check" classname="api.spec.js" time="0.042">
+</testcase>
+<testcase name="Toyota MyT2ABRP API Tests › Health &amp; Status Endpoints › should return application status" classname="api.spec.js" time="0.013">
+</testcase>
+<testcase name="Toyota MyT2ABRP API Tests › Component Integration › validation component should be accessible" classname="api.spec.js" time="0.013">
+</testcase>
+<testcase name="Toyota MyT2ABRP API Tests › Component Integration › metrics component should track requests" classname="api.spec.js" time="0.013">
+</testcase>
+<testcase name="Toyota MyT2ABRP API Tests › Error Handling › should handle 404 for unknown routes" classname="api.spec.js" time="0.009">
+</testcase>
+<testcase name="Toyota MyT2ABRP API Tests › Error Handling › should handle malformed requests" classname="api.spec.js" time="0.012">
+<failure message="api.spec.js:43:5 should handle malformed requests" type="FAILURE">
+<![CDATA[  [api-tests] › api.spec.js:43:5 › Toyota MyT2ABRP API Tests › Error Handling › should handle malformed requests 
+
+    Error: expect(received).toContain(expected) // indexOf
+
+    Expected value: 200
+    Received array: [400, 422, 500]
+
+      45 |         data: 'invalid json string'
+      46 |       });
+    > 47 |       expect([400, 422, 500]).toContain(response.status());
+         |                               ^
+      48 |     });
+      49 |   });
+      50 |
+        at /home/user/spin_myT2ABRP/tests/e2e/tests/api.spec.js:47:31
+]]>
+</failure>
+</testcase>
+<testcase name="Toyota MyT2ABRP API Tests › Circuit Breaker &amp; Retry Logic › should retry on transient failures" classname="api.spec.js" time="0.047">
+</testcase>
+<testcase name="Toyota MyT2ABRP API Tests › Circuit Breaker &amp; Retry Logic › circuit breaker should open after failures" classname="api.spec.js" time="0.035">
+</testcase>
+<testcase name="Toyota MyT2ABRP API Tests › Data Transformation › should transform vehicle data correctly" classname="api.spec.js" time="0.013">
+</testcase>
+<testcase name="Toyota MyT2ABRP API Tests › Authentication &amp; Authorization › should reject requests without auth" classname="api.spec.js" time="0.016">
+</testcase>
+<testcase name="Toyota MyT2ABRP API Tests › Authentication &amp; Authorization › should validate JWT tokens" classname="api.spec.js" time="0.009">
+</testcase>
+<testcase name="Toyota MyT2ABRP API Tests › Performance › should respond within acceptable time" classname="api.spec.js" time="0.009">
+</testcase>
+<testcase name="Toyota MyT2ABRP API Tests › Performance › should handle concurrent requests" classname="api.spec.js" time="0.041">
+</testcase>
+</testsuite>
+<testsuite name="performance.spec.js" timestamp="2025-11-16T21:41:03.262Z" hostname="performance-tests" tests="4" failures="0" skipped="0" time="8.801" errors="0">
+<testcase name="Performance Tests › measure response time for health endpoint" classname="performance.spec.js" time="0.341">
+<system-out>
+<![CDATA[Performance Stats (100 requests):
+  Average: 3.22ms
+  Min: 2ms
+  Max: 20ms
+]]>
+</system-out>
+</testcase>
+<testcase name="Performance Tests › measure throughput" classname="performance.spec.js" time="5.01">
+<system-out>
+<![CDATA[Throughput: 416.12 req/sec
+]]>
+</system-out>
+</testcase>
+<testcase name="Performance Tests › measure memory stability under load" classname="performance.spec.js" time="3.199">
+<system-out>
+<![CDATA[First half avg: 57.10ms
+Second half avg: 60.40ms
+Degradation: 5.78%
+]]>
+</system-out>
+</testcase>
+<testcase name="Performance Tests › measure component composition overhead" classname="performance.spec.js" time="0.251">
+<system-out>
+<![CDATA[Simple endpoint avg: 2.38ms
+Composed endpoint avg: 2.54ms
+Composition overhead: 6.72%
+]]>
+</system-out>
+</testcase>
+</testsuite>
+</testsuites>

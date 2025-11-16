@@ -1,0 +1,23 @@
+spin_manifest_version = 2
+
+[application]
+name = "test-http"
+version = "0.1.0"
+description = "Simple HTTP test component for Toyota MyT2ABRP"
+authors = ["Toyota MyT2ABRP Team"]
+
+[application.trigger.http]
+base = "/"
+
+[[trigger.http]]
+id = "test-http"
+component = "test-http"
+route = "/..."
+
+[component.test-http]
+source = "target/wasm32-wasip2/release/test_http.wasm"
+allowed_outbound_hosts = []
+
+[component.test-http.build]
+command = "cargo build --target wasm32-wasip2 --release --manifest-path Cargo.toml"
+workdir = "test-http"
