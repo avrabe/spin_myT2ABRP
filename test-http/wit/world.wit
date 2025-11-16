@@ -1,0 +1,9 @@
+package test:http@0.1.0;
+
+world test-http {
+    // Import WASI HTTP types for incoming request handling
+    import wasi:http/types@0.2.0;
+
+    // Export the incoming HTTP handler
+    export wasi:http/incoming-handler@0.2.0;
+}
