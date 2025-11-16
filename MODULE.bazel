@@ -17,7 +17,130 @@ git_override(
 )
 
 # Rust toolchain for Rust components
-bazel_dep(name = "rules_rust", version = "0.61.0")
+bazel_dep(name = "rules_rust", version = "0.65.0")
+
+# Use the same git_override for rules_rust as rules_wasm_component
+# This fixes wasm-component-ld.exe issues on Windows and ensures compatibility
+git_override(
+    module_name = "rules_rust",
+    remote = "https://github.com/avrabe/rules_rust.git",
+    branch = "fix/add-missing-rustc-binaries",
+)
 
 # Required for hermetic toolchains
 bazel_dep(name = "platforms", version = "0.0.10")
+bazel_dep(name = "bazel_skylib", version = "1.8.1")
+
+# Use git_override to avoid BCR proxy issues
+git_override(
+    module_name = "bazel_skylib",
+    remote = "https://github.com/bazelbuild/bazel-skylib.git",
+    tag = "1.8.1",
+)
+
+git_override(
+    module_name = "platforms",
+    remote = "https://github.com/bazelbuild/platforms.git",
+    tag = "0.0.10",
+)
+
+# Additional dependencies needed by rules_wasm_component
+git_override(
+    module_name = "rules_cc",
+    remote = "https://github.com/bazelbuild/rules_cc.git",
+    tag = "0.2.4",
+)
+
+git_override(
+    module_name = "rules_go",
+    remote = "https://github.com/bazelbuild/rules_go.git",
+    tag = "v0.57.0",
+)
+
+git_override(
+    module_name = "rules_shell",
+    remote = "https://github.com/bazelbuild/rules_shell.git",
+    tag = "v0.2.0",
+)
+
+git_override(
+    module_name = "rules_oci",
+    remote = "https://github.com/bazel-contrib/rules_oci.git",
+    tag = "v1.8.0",
+)
+
+git_override(
+    module_name = "rules_nodejs",
+    remote = "https://github.com/bazelbuild/rules_nodejs.git",
+    tag = "v6.5.0",
+)
+
+git_override(
+    module_name = "bazel_features",
+    remote = "https://github.com/bazel-contrib/bazel_features.git",
+    tag = "v1.32.0",
+)
+
+# Additional rules - using git_override to avoid BCR proxy issues
+git_override(
+    module_name = "rules_pkg",
+    remote = "https://github.com/bazelbuild/rules_pkg.git",
+    tag = "1.1.1",
+)
+
+git_override(
+    module_name = "rules_proto",
+    remote = "https://github.com/bazelbuild/rules_proto.git",
+    tag = "7.1.0",
+)
+
+git_override(
+    module_name = "rules_python",
+    remote = "https://github.com/bazelbuild/rules_python.git",
+    tag = "1.2.0",
+)
+
+# Note: Some C++ library dependencies (zlib, protobuf, abseil-cpp) may still need
+# to be fetched from BCR. If BCR access is blocked, those dependencies will need
+# special handling or the proxy configuration needs to be fixed.
+
+# Rust toolchain setup
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2021",
+    extra_target_triples = [
+        "wasm32-unknown-unknown",
+        "wasm32-wasip1",
+        "wasm32-wasip2",
+    ],
+    versions = ["1.90.0"],
+)
+use_repo(rust, "rust_toolchains")
+
+# Register Rust toolchains
+register_toolchains("@rust_toolchains//:all")
+
+# Rust crate dependencies
+crate = use_extension("@rules_rust//crate_universe:extension.bzl", "crate")
+crate.from_cargo(
+    name = "crates",
+    cargo_lockfile = "//:Cargo.lock",
+    manifests = [
+        "//:Cargo.toml",
+        "//components/business-logic:Cargo.toml",
+        "//components/circuit-breaker:Cargo.toml",
+        "//components/data-transform:Cargo.toml",
+        "//components/gateway:Cargo.toml",
+        "//components/metrics:Cargo.toml",
+        "//components/retry-logic:Cargo.toml",
+        "//components/toyota-api-types:Cargo.toml",
+        "//components/validation:Cargo.toml",
+    ],
+    supported_platform_triples = [
+        "wasm32-wasip2",
+        "wasm32-unknown-unknown",
+        "wasm32-wasip1",
+        "x86_64-unknown-linux-gnu",
+    ],
+)
+use_repo(crate, "crates")
