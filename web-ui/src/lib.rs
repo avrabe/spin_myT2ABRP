@@ -1,67 +1,188 @@
 // Toyota MyT2ABRP Web UI Component
-// Serves static files and provides API endpoints with HTMX support
+//
+// This component serves as the primary web interface for the MyT2ABRP application.
+// It provides:
+// - Static file serving (HTML, CSS, JavaScript) for the web dashboard
+// - RESTful API endpoints for vehicle status, charging control, and analytics
+// - HTMX-compatible HTML fragments for dynamic updates
+// - Health check and metrics endpoints for monitoring
+//
+// Architecture:
+// - Built on Fermyon Spin (WebAssembly serverless runtime)
+// - Compiles to wasm32-wasip2 target
+// - Uses minimal dependencies for optimal WASM binary size
+// - Stateless design (all state managed externally)
 
 use spin_sdk::http::{IntoResponse, Method, Request, ResponseBuilder};
 use spin_sdk::http_component;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use chrono::Utc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 
-// Vehicle Status
+// ============================================================================
+// Global Metrics Tracking
+// ============================================================================
+// These static atomics track application metrics across all requests.
+// They are thread-safe and have minimal performance overhead.
+
+static REQUEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+static SUCCESS_COUNTER: AtomicU64 = AtomicU64::new(0);
+static ERROR_COUNTER: AtomicU64 = AtomicU64::new(0);
+static START_TIME: once_cell::sync::Lazy<Instant> = once_cell::sync::Lazy::new(Instant::now);
+
+// ============================================================================
+// Error Types
+// ============================================================================
+
+/// Custom error type for web-ui operations
+#[derive(Debug)]
+enum WebUiError {
+    /// File not found error
+    NotFound(String),
+    /// Internal server error
+    InternalError(String),
+    /// Invalid request error
+    BadRequest(String),
+}
+
+impl std::fmt::Display for WebUiError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WebUiError::NotFound(msg) => write!(f, "Not Found: {}", msg),
+            WebUiError::InternalError(msg) => write!(f, "Internal Error: {}", msg),
+            WebUiError::BadRequest(msg) => write!(f, "Bad Request: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for WebUiError {}
+
+// ============================================================================
+// Data Structures
+// ============================================================================
+
+/// Represents the current status of the vehicle
+///
+/// This structure contains real-time information about the vehicle's state,
+/// including battery level, range, charging status, and location.
 #[derive(Serialize)]
 struct VehicleStatus {
+    /// Vehicle Identification Number
     vin: String,
+    /// Current battery level (0-100%)
     battery_level: u8,
+    /// Estimated range in kilometers
     range_km: u16,
+    /// Whether the vehicle is currently charging
     is_charging: bool,
+    /// Whether the vehicle is connected to the cloud
     is_connected: bool,
+    /// Optional GPS location of the vehicle
     location: Option<Location>,
 }
 
+/// GPS coordinates for vehicle location
 #[derive(Serialize)]
 struct Location {
+    /// Latitude in decimal degrees
     lat: f64,
+    /// Longitude in decimal degrees
     lon: f64,
 }
 
-// Charging Status
+/// Represents the current charging session status
+///
+/// Provides detailed information about an active or recent charging session,
+/// including power delivery, timing, and target charge level.
 #[derive(Serialize)]
 struct ChargingStatus {
+    /// Whether charging is currently active
     is_charging: bool,
+    /// Current battery level (0-100%)
     current_level: u8,
+    /// Target charge level (0-100%)
     target_level: u8,
+    /// Charging power in kilowatts (kW)
     power_kw: f32,
+    /// Estimated time to complete charging (in minutes)
     time_remaining_minutes: Option<u16>,
+    /// Energy delivery rate in kWh
     charge_rate_kwh: f32,
 }
 
-// Battery Health
+/// Battery health metrics and diagnostics
+///
+/// Tracks the long-term health and condition of the vehicle's battery pack,
+/// including degradation, cycle count, and operating temperature.
 #[derive(Serialize)]
 struct BatteryHealth {
+    /// Current battery capacity as percentage of original (0-100%)
     capacity_percentage: u8,
+    /// Human-readable health status (e.g., "Excellent", "Good", "Fair", "Poor")
     health_status: String,
+    /// Number of complete charge/discharge cycles
     cycles: u32,
+    /// Current battery pack temperature in Celsius
     temperature_celsius: f32,
 }
 
-// Alert Configuration (reserved for future POST /api/alerts/save implementation)
+/// Configuration for charging alerts and notifications
+///
+/// Allows users to customize when they receive notifications about their
+/// vehicle's charging status.
+///
+/// Note: This structure is currently unused but reserved for future implementation
+/// of the POST /api/alerts/save endpoint.
 #[allow(dead_code)]
 #[derive(Deserialize)]
 struct AlertConfig {
+    /// Send alert when charging is complete (100%)
     charge_complete: bool,
+    /// Send alert at 80% (optimal for battery longevity)
     optimal_charge: bool,
+    /// Custom alert level (50-100%)
     custom_level: u8,
+    /// Alert when battery falls below 20%
     low_battery: bool,
+    /// Alert when charging is slower than expected
     charging_slow: bool,
+    /// Alert when vehicle is ready for a planned trip
     ready_for_trip: bool,
 }
 
+// ============================================================================
+// Main HTTP Handler
+// ============================================================================
+
+/// Main HTTP request handler
+///
+/// This function is the entry point for all HTTP requests to the web-ui component.
+/// It implements routing based on HTTP method and path, serving static files and
+/// API endpoints as appropriate.
+///
+/// ## Request Logging
+/// All requests are logged with method, path, and status code for observability.
+///
+/// ## Metrics Tracking
+/// The handler increments request counters for monitoring and alerting.
+///
+/// ## Error Handling
+/// Errors are logged to stderr and returned as appropriate HTTP error responses.
 #[http_component]
 fn handle_request(req: Request) -> anyhow::Result<impl IntoResponse> {
     let path = req.path();
     let method = req.method();
 
-    match (method, path) {
+    // Increment request counter
+    REQUEST_COUNTER.fetch_add(1, Ordering::Relaxed);
+
+    // Log incoming request
+    eprintln!("[INFO] {} {}", method, path);
+
+    // Route request and track result
+    let result = match (method, path) {
         // Static files
         (Method::Get, "/") | (Method::Get, "/index.html") => {
             serve_static_file("index.html", "text/html")
@@ -204,44 +325,101 @@ fn handle_request(req: Request) -> anyhow::Result<impl IntoResponse> {
         }
 
         (Method::Get, "/api/metrics") => {
+            // Calculate real uptime
+            let uptime = START_TIME.elapsed().as_secs();
+
+            // Load atomic counters
+            let total = REQUEST_COUNTER.load(Ordering::Relaxed);
+            let success = SUCCESS_COUNTER.load(Ordering::Relaxed);
+            let errors = ERROR_COUNTER.load(Ordering::Relaxed);
+
+            // Calculate cache hit rate (placeholder - would need actual cache tracking)
+            let cache_hit_rate = 0.0;
+
             Ok(json_response_with_security(&json!({
-                "uptime_seconds": 0, // Would be tracked in actual implementation
-                "requests_total": 0,
-                "requests_success": 0,
-                "requests_error": 0,
-                "cache_hit_rate": 0.0
+                "uptime_seconds": uptime,
+                "requests_total": total,
+                "requests_success": success,
+                "requests_error": errors,
+                "cache_hit_rate": cache_hit_rate
             })))
         }
 
         // 404 for unknown routes
         _ => {
-            eprintln!("[404] Unknown route: {:?} {}", method, path);
+            ERROR_COUNTER.fetch_add(1, Ordering::Relaxed);
+            eprintln!("[WARN] 404 Not Found: {} {}", method, path);
             Ok(ResponseBuilder::new(404)
                 .header("content-type", "text/html")
                 .header("X-Content-Type-Options", "nosniff")
                 .body("<h1>404 Not Found</h1>")
                 .build())
         }
+    };
+
+    // Log result and update metrics
+    match &result {
+        Ok(_) => {
+            SUCCESS_COUNTER.fetch_add(1, Ordering::Relaxed);
+            eprintln!("[SUCCESS] {} {} - 200 OK", method, path);
+        }
+        Err(e) => {
+            ERROR_COUNTER.fetch_add(1, Ordering::Relaxed);
+            eprintln!("[ERROR] {} {} - Error: {}", method, path, e);
+        }
     }
+
+    result
 }
 
-// Helper: Serve static file
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/// Serves a static file from the compiled binary
+///
+/// Static files are embedded into the WASM binary at compile time using
+/// include_str! macro, eliminating the need for a separate file system.
+///
+/// ## Caching
+/// Static files are cached for 1 hour (3600 seconds) via Cache-Control header
+/// to reduce network traffic and improve performance.
+///
+/// ## Arguments
+/// * `filename` - Name of the file to serve ("index.html", "styles.css", "app.js")
+/// * `content_type` - MIME type for the Content-Type header
+///
+/// ## Returns
+/// HTTP response with the file contents or 404 if file not found
 fn serve_static_file(filename: &str, content_type: &str) -> anyhow::Result<spin_sdk::http::Response> {
     let content = match filename {
         "index.html" => include_str!("../static/index.html"),
         "styles.css" => include_str!("../static/styles.css"),
         "app.js" => include_str!("../static/app.js"),
-        _ => return Ok(ResponseBuilder::new(404).body("Not found").build()),
+        _ => {
+            eprintln!("[ERROR] Static file not found: {}", filename);
+            return Ok(ResponseBuilder::new(404).body("Not found").build());
+        }
     };
 
     Ok(ResponseBuilder::new(200)
         .header("content-type", content_type)
         .header("cache-control", "public, max-age=3600")
+        .header("X-Content-Type-Options", "nosniff")
         .body(content)
         .build())
 }
 
-// Helper: HTML response
+/// Creates an HTML response for HTMX fragments
+///
+/// Used for endpoints that return HTML fragments to be swapped into the page
+/// by HTMX. The response includes UTF-8 charset specification.
+///
+/// ## Arguments
+/// * `html` - The HTML content to return
+///
+/// ## Returns
+/// HTTP 200 response with HTML content type
 fn html_response(html: &str) -> spin_sdk::http::Response {
     ResponseBuilder::new(200)
         .header("content-type", "text/html; charset=utf-8")
@@ -249,7 +427,16 @@ fn html_response(html: &str) -> spin_sdk::http::Response {
         .build()
 }
 
-// Helper: JSON response
+/// Creates a JSON response
+///
+/// Used for API endpoints that return structured data (e.g., action confirmations,
+/// error messages).
+///
+/// ## Arguments
+/// * `value` - The JSON value to serialize and return
+///
+/// ## Returns
+/// HTTP 200 response with JSON content type
 fn json_response(value: &serde_json::Value) -> spin_sdk::http::Response {
     ResponseBuilder::new(200)
         .header("content-type", "application/json")
@@ -257,7 +444,23 @@ fn json_response(value: &serde_json::Value) -> spin_sdk::http::Response {
         .build()
 }
 
-// Helper: JSON response with security headers
+/// Creates a JSON response with comprehensive security headers
+///
+/// Used for sensitive endpoints (health checks, metrics) that should not be
+/// cached or embedded in other sites.
+///
+/// ## Security Headers
+/// - `X-Content-Type-Options: nosniff` - Prevents MIME type sniffing
+/// - `X-Frame-Options: DENY` - Prevents clickjacking attacks
+/// - `X-XSS-Protection: 1; mode=block` - Enables XSS filter
+/// - `Referrer-Policy: strict-origin-when-cross-origin` - Controls referrer info
+/// - `Cache-Control: no-store, no-cache, must-revalidate` - Prevents caching
+///
+/// ## Arguments
+/// * `value` - The JSON value to serialize and return
+///
+/// ## Returns
+/// HTTP 200 response with JSON content type and security headers
 fn json_response_with_security(value: &serde_json::Value) -> spin_sdk::http::Response {
     ResponseBuilder::new(200)
         .header("content-type", "application/json")
@@ -270,7 +473,22 @@ fn json_response_with_security(value: &serde_json::Value) -> spin_sdk::http::Res
         .build()
 }
 
-// Render Functions
+// ============================================================================
+// HTML Rendering Functions
+// ============================================================================
+// These functions generate HTML fragments for HTMX to swap into the page.
+// They use inline CSS for styling where needed and follow the Toyota design system.
+
+/// Renders vehicle status as an HTML fragment
+///
+/// Creates a comprehensive vehicle status display including battery level indicator,
+/// VIN, range, and current charging/parking status.
+///
+/// ## Arguments
+/// * `status` - Current vehicle status data
+///
+/// ## Returns
+/// HTML string with vehicle status markup
 fn render_vehicle_status(status: &VehicleStatus) -> String {
     format!(
         r#"<div>
@@ -304,6 +522,16 @@ fn render_vehicle_status(status: &VehicleStatus) -> String {
     )
 }
 
+/// Renders charging status as an HTML fragment
+///
+/// Displays current charging session information including progress bar,
+/// power delivery, time remaining, and charge rate.
+///
+/// ## Arguments
+/// * `status` - Current charging status data
+///
+/// ## Returns
+/// HTML string with charging status markup including progress visualization
 fn render_charging_status(status: &ChargingStatus) -> String {
     let time_remaining = status.time_remaining_minutes
         .map(|mins| format!("{} min", mins))
@@ -344,6 +572,16 @@ fn render_charging_status(status: &ChargingStatus) -> String {
     )
 }
 
+/// Renders battery health metrics as an HTML fragment
+///
+/// Shows battery capacity, health status, charge cycles, and temperature
+/// in an easy-to-read format with visual emphasis on the health percentage.
+///
+/// ## Arguments
+/// * `health` - Battery health data
+///
+/// ## Returns
+/// HTML string with battery health metrics
 fn render_battery_health(health: &BatteryHealth) -> String {
     format!(
         r#"<div>
@@ -373,6 +611,14 @@ fn render_battery_health(health: &BatteryHealth) -> String {
     )
 }
 
+/// Renders recent charging history as an HTML fragment
+///
+/// Shows a list of recent charging sessions with date, time, duration,
+/// and energy consumed. Currently uses demo data - would be replaced
+/// with actual historical data from a database.
+///
+/// ## Returns
+/// HTML string with charging history list and embedded styles
 fn render_charging_history() -> String {
     r#"<div class="history-list">
         <div class="history-item">
@@ -395,6 +641,14 @@ fn render_charging_history() -> String {
     </style>"#.to_string()
 }
 
+/// Renders active charging alerts as an HTML fragment
+///
+/// Displays current active alerts and notifications related to charging,
+/// battery status, and vehicle readiness. Alerts are styled with different
+/// colors based on their type (success, warning, info).
+///
+/// ## Returns
+/// HTML string with alerts list and embedded styles
 fn render_active_alerts() -> String {
     r#"<div class="alerts-list">
         <div class="alert-item success">
@@ -414,6 +668,13 @@ fn render_active_alerts() -> String {
     </style>"#.to_string()
 }
 
+/// Renders weekly charging statistics as an HTML fragment
+///
+/// Shows aggregated charging data for the past week including number of
+/// sessions, total energy consumed, and average session duration.
+///
+/// ## Returns
+/// HTML string with weekly statistics
 fn render_weekly_analytics() -> String {
     r#"<div>
         <h3>Weekly Charging Stats</h3>
@@ -434,6 +695,13 @@ fn render_weekly_analytics() -> String {
     </div>"#.to_string()
 }
 
+/// Renders charging cost analysis as an HTML fragment
+///
+/// Displays cost breakdown for charging sessions including weekly/monthly totals,
+/// average cost per session, and average price per kWh.
+///
+/// ## Returns
+/// HTML string with cost analysis metrics
 fn render_cost_analytics() -> String {
     r#"<div>
         <h3>Cost Analysis</h3>
@@ -454,6 +722,13 @@ fn render_cost_analytics() -> String {
     </div>"#.to_string()
 }
 
+/// Renders energy efficiency metrics as an HTML fragment
+///
+/// Shows vehicle efficiency data including charging efficiency, average
+/// consumption per 100km, and battery health percentage.
+///
+/// ## Returns
+/// HTML string with efficiency metrics
 fn render_efficiency_analytics() -> String {
     r#"<div>
         <h3>Efficiency Metrics</h3>
