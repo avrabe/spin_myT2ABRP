@@ -1,0 +1,97 @@
+# Toyota MyT2ABRP Development Environment
+# Multi-stage build for optimal layer caching
+
+FROM rust:1.91.1-slim as base
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    git \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js for testing
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust targets
+RUN rustup target add wasm32-wasip1 wasm32-wasip2
+
+# Install cargo tools
+RUN cargo install cargo-component --version 0.21.1 --locked \
+    && cargo install wasm-tools --locked \
+    && cargo install wasmtime-cli --locked \
+    && cargo install wac-cli --locked \
+    && cargo install cargo-watch --locked
+
+# Install Spin CLI
+ARG SPIN_VERSION=v3.0.0
+RUN curl -fsSL https://developer.fermyon.com/downloads/install.sh | bash -s -- --version ${SPIN_VERSION} \
+    && mv spin /usr/local/bin/spin \
+    && spin --version
+
+# Create app directory
+WORKDIR /app
+
+# Cache dependencies layer
+FROM base as dependencies
+COPY Cargo.toml Cargo.lock ./
+COPY components/ ./components/
+COPY myt/ ./myt/
+COPY myt2abrp/ ./myt2abrp/
+RUN cargo fetch
+
+# Development stage
+FROM dependencies as development
+
+# Copy all source code
+COPY . .
+
+# Install Node.js dependencies for testing
+RUN cd tests/e2e && npm install
+
+# Expose Spin default port
+EXPOSE 3000
+
+# Development command (with hot reload)
+CMD ["cargo", "watch", "-x", "build --target wasm32-wasip2 --release"]
+
+# Build stage
+FROM dependencies as builder
+
+COPY . .
+
+# Build all components
+RUN ./scripts/build-all-components.sh --release
+
+# Build test HTTP component
+RUN cd test-http && cargo build --target wasm32-wasip2 --release
+
+# Production stage
+FROM scratch as production
+
+# Copy only the built WASM files
+COPY --from=builder /app/target/wasm32-wasip1/release/toyota_*.wasm /components/
+COPY --from=builder /app/test-http/target/wasm32-wasip2/release/test_http.wasm /app/
+
+# Spin runtime stage
+FROM base as runtime
+
+# Install only Spin CLI (minimal)
+COPY --from=base /usr/local/bin/spin /usr/local/bin/spin
+
+WORKDIR /app
+
+# Copy built components
+COPY --from=builder /app/test-http/target/wasm32-wasip2/release/test_http.wasm ./test-http/target/wasm32-wasip2/release/
+COPY --from=builder /app/test-http/spin.toml ./test-http/
+
+EXPOSE 3000
+
+# Run Spin
+CMD ["spin", "up", "--from", "test-http"]

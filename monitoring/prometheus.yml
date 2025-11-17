@@ -1,0 +1,77 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'toyota-myt2abrp'
+    environment: 'development'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - 'alertmanager:9093'
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - '/etc/prometheus/rules/*.yml'
+
+# Scrape configurations
+scrape_configs:
+  # Toyota MyT2ABRP API
+  - job_name: 'toyota-myt2abrp-api'
+    static_configs:
+      - targets: ['dev:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+    scrape_timeout: 4s
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Node exporter (if running)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: '([^:]+)(:[0-9]+)?'
+        replacement: '${1}'
+
+  # WASM runtime metrics (Spin)
+  - job_name: 'spin-runtime'
+    static_configs:
+      - targets: ['dev:3000']
+    metrics_path: '/metrics'
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'spin_.*'
+        action: keep
+
+  # Component-specific metrics
+  - job_name: 'components'
+    static_configs:
+      - targets: ['dev:3000']
+        labels:
+          component: 'validation'
+      - targets: ['dev:3000']
+        labels:
+          component: 'retry-logic'
+      - targets: ['dev:3000']
+        labels:
+          component: 'circuit-breaker'
+      - targets: ['dev:3000']
+        labels:
+          component: 'metrics'
+      - targets: ['dev:3000']
+        labels:
+          component: 'data-transform'
+      - targets: ['dev:3000']
+        labels:
+          component: 'business-logic'
+      - targets: ['dev:3000']
+        labels:
+          component: 'gateway'
