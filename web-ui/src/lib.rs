@@ -38,7 +38,8 @@ static START_TIME: once_cell::sync::Lazy<Instant> = once_cell::sync::Lazy::new(I
 // Error Types
 // ============================================================================
 
-/// Custom error type for web-ui operations
+/// Custom error type for web-ui operations (reserved for future use)
+#[allow(dead_code)]
 #[derive(Debug)]
 enum WebUiError {
     /// File not found error
