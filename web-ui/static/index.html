@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Toyota MyT to ABRP - Dashboard</title>
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <script src="https://unpkg.com/htmx.org/dist/ext/sse.js"></script>
     <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -31,27 +29,23 @@
         <main id="dashboard" class="section active">
             <div class="grid">
                 <!-- Vehicle Status Card -->
-                <div class="card status-card"
-                     hx-get="/api/vehicle/status"
-                     hx-trigger="load, every 5s"
-                     hx-swap="innerHTML">
-                    <div class="loading">Loading vehicle status...</div>
+                <div class="card status-card">
+                    <div id="vehicle-status">
+                        <div class="loading">Loading vehicle status...</div>
+                    </div>
                 </div>
 
                 <!-- Charging Status Card -->
-                <div class="card charging-card"
-                     hx-get="/api/charging/status"
-                     hx-trigger="load, every 2s"
-                     hx-swap="innerHTML">
-                    <div class="loading">Loading charging status...</div>
+                <div class="card charging-card">
+                    <div id="charging-status">
+                        <div class="loading">Loading charging status...</div>
+                    </div>
                 </div>
 
                 <!-- Range Card -->
                 <div class="card range-card">
                     <h2>Range Information</h2>
-                    <div hx-get="/api/range"
-                         hx-trigger="load, every 10s"
-                         hx-swap="innerHTML">
+                    <div id="range-info">
                         <div class="loading">Calculating range...</div>
                     </div>
                 </div>
@@ -61,43 +55,34 @@
                     <h2>Quick Actions</h2>
                     <div class="actions">
                         <button class="action-btn"
-                                hx-post="/api/charging/start"
-                                hx-swap="none"
-                                hx-indicator=".charging-indicator">
+                                data-action="start charging"
+                                data-endpoint="/api/charging/start">
                             <span class="icon">🔌</span>
                             Start Charging
                         </button>
                         <button class="action-btn"
-                                hx-post="/api/charging/stop"
-                                hx-swap="none">
+                                data-action="stop charging"
+                                data-endpoint="/api/charging/stop">
                             <span class="icon">⏸️</span>
                             Stop Charging
                         </button>
                         <button class="action-btn"
-                                hx-post="/api/precondition"
-                                hx-swap="none">
+                                data-action="precondition"
+                                data-endpoint="/api/precondition">
                             <span class="icon">❄️</span>
                             Pre-Condition
                         </button>
-                        <button class="action-btn"
-                                hx-get="/api/route/plan"
-                                hx-target="#route-modal"
-                                hx-swap="innerHTML">
+                        <button class="action-btn">
                             <span class="icon">🗺️</span>
                             Plan Route
                         </button>
-                    </div>
-                    <div class="charging-indicator htmx-indicator">
-                        <div class="spinner"></div>
                     </div>
                 </div>
 
                 <!-- Charging History -->
                 <div class="card history-card">
                     <h2>Recent Charging Sessions</h2>
-                    <div hx-get="/api/charging/history"
-                         hx-trigger="load"
-                         hx-swap="innerHTML">
+                    <div id="charging-history">
                         <div class="loading">Loading history...</div>
                     </div>
                 </div>
@@ -105,9 +90,7 @@
                 <!-- Battery Health -->
                 <div class="card health-card">
                     <h2>Battery Health</h2>
-                    <div hx-get="/api/battery/health"
-                         hx-trigger="load, every 60s"
-                         hx-swap="innerHTML">
+                    <div id="battery-health">
                         <div class="loading">Checking battery health...</div>
                     </div>
                 </div>
@@ -118,32 +101,21 @@
         <section id="alerts" class="section">
             <div class="section-header">
                 <h2>Charging Alerts</h2>
-                <button class="btn-primary"
-                        hx-get="/api/alerts/config"
-                        hx-target="#alert-config"
-                        hx-swap="innerHTML">
-                    Configure Alerts
-                </button>
             </div>
 
             <div class="alerts-container">
                 <!-- Active Alerts -->
                 <div class="card">
                     <h3>Active Alerts</h3>
-                    <div hx-get="/api/alerts/active"
-                         hx-trigger="load, every 3s"
-                         hx-swap="innerHTML">
+                    <div id="active-alerts">
                         <div class="loading">Loading alerts...</div>
                     </div>
                 </div>
 
                 <!-- Alert Configuration -->
-                <div id="alert-config" class="card">
+                <div class="card">
                     <h3>Alert Settings</h3>
-                    <form hx-post="/api/alerts/save"
-                          hx-swap="none"
-                          hx-on::after-request="showNotification('Settings saved!')">
-
+                    <form data-api="/api/alerts/save">
                         <label>
                             <input type="checkbox" name="charge_complete" checked>
                             Notify when charging is complete (100%)
@@ -186,26 +158,25 @@
         <section id="analytics" class="section">
             <h2>Charging Analytics</h2>
             <div class="grid analytics-grid">
-                <!-- Charts will be loaded here -->
-                <div class="card"
-                     hx-get="/api/analytics/weekly"
-                     hx-trigger="load"
-                     hx-swap="innerHTML">
-                    <div class="loading">Loading weekly stats...</div>
+                <!-- Weekly Stats -->
+                <div class="card">
+                    <div id="weekly-analytics">
+                        <div class="loading">Loading weekly stats...</div>
+                    </div>
                 </div>
 
-                <div class="card"
-                     hx-get="/api/analytics/costs"
-                     hx-trigger="load"
-                     hx-swap="innerHTML">
-                    <div class="loading">Loading cost analysis...</div>
+                <!-- Cost Analysis -->
+                <div class="card">
+                    <div id="cost-analytics">
+                        <div class="loading">Loading cost analysis...</div>
+                    </div>
                 </div>
 
-                <div class="card"
-                     hx-get="/api/analytics/efficiency"
-                     hx-trigger="load"
-                     hx-swap="innerHTML">
-                    <div class="loading">Loading efficiency metrics...</div>
+                <!-- Efficiency Metrics -->
+                <div class="card">
+                    <div id="efficiency-analytics">
+                        <div class="loading">Loading efficiency metrics...</div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -216,8 +187,7 @@
             <div class="settings-container">
                 <div class="card">
                     <h3>Vehicle Configuration</h3>
-                    <form hx-post="/api/settings/vehicle"
-                          hx-swap="none">
+                    <form data-api="/api/settings/vehicle">
                         <label>
                             VIN:
                             <input type="text" name="vin" placeholder="TESTVIN123456789">
@@ -232,8 +202,7 @@
 
                 <div class="card">
                     <h3>API Configuration</h3>
-                    <form hx-post="/api/settings/api"
-                          hx-swap="none">
+                    <form data-api="/api/settings/api">
                         <label>
                             Toyota API Token:
                             <input type="password" name="toyota_token">
@@ -248,8 +217,7 @@
 
                 <div class="card">
                     <h3>Notification Preferences</h3>
-                    <form hx-post="/api/settings/notifications"
-                          hx-swap="none">
+                    <form data-api="/api/settings/notifications">
                         <label>
                             <input type="checkbox" name="push_enabled" checked>
                             Enable push notifications
@@ -268,9 +236,6 @@
             </div>
         </section>
     </div>
-
-    <!-- Modal for route planning -->
-    <div id="route-modal" class="modal"></div>
 
     <!-- Notification Toast -->
     <div id="notification" class="notification"></div>

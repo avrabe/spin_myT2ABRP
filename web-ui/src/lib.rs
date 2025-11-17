@@ -3,13 +3,15 @@
 // This component serves as the primary web interface for the MyT2ABRP application.
 // It provides:
 // - Static file serving (HTML, CSS, JavaScript) for the web dashboard
-// - RESTful API endpoints for vehicle status, charging control, and analytics
-// - HTMX-compatible HTML fragments for dynamic updates
+// - RESTful JSON API endpoints for vehicle status, charging control, and analytics
+// - Clean separation of concerns: Rust returns JSON, JavaScript handles rendering
 // - Health check and metrics endpoints for monitoring
 //
 // Architecture:
 // - Built on Fermyon Spin (WebAssembly serverless runtime)
 // - Compiles to wasm32-wasip2 target
+// - JSON API-first design (modern web architecture)
+// - Client-side rendering with vanilla JavaScript
 // - Uses minimal dependencies for optimal WASM binary size
 // - Stateless design (all state managed externally)
 
@@ -190,7 +192,7 @@ fn handle_request(req: Request) -> anyhow::Result<impl IntoResponse> {
         (Method::Get, "/styles.css") => serve_static_file("styles.css", "text/css"),
         (Method::Get, "/app.js") => serve_static_file("app.js", "application/javascript"),
 
-        // API Endpoints - Vehicle Status
+        // API Endpoints - Vehicle Status (JSON)
         (Method::Get, "/api/vehicle/status") => {
             let status = VehicleStatus {
                 vin: "TESTVIN123456789".to_string(),
@@ -204,10 +206,10 @@ fn handle_request(req: Request) -> anyhow::Result<impl IntoResponse> {
                 }),
             };
 
-            Ok(html_response(&render_vehicle_status(&status)))
+            Ok(json_response(&serde_json::to_value(&status)?))
         }
 
-        // API Endpoints - Charging Status
+        // API Endpoints - Charging Status (JSON)
         (Method::Get, "/api/charging/status") => {
             let status = ChargingStatus {
                 is_charging: true,
@@ -218,24 +220,17 @@ fn handle_request(req: Request) -> anyhow::Result<impl IntoResponse> {
                 charge_rate_kwh: 48.5,
             };
 
-            Ok(html_response(&render_charging_status(&status)))
+            Ok(json_response(&serde_json::to_value(&status)?))
         }
 
-        // API Endpoints - Range
-        (Method::Get, "/api/range") => Ok(html_response(&format!(
-            r#"<div class="range-info">
-                    <div>
-                        <div class="stat-label">Estimated Range</div>
-                        <div class="range-value">320 km</div>
-                    </div>
-                    <div>
-                        <div class="stat-label">Range @ 80%</div>
-                        <div class="stat-value">280 km</div>
-                    </div>
-                </div>"#
-        ))),
+        // API Endpoints - Range (JSON)
+        (Method::Get, "/api/range") => Ok(json_response(&json!({
+            "estimated_range_km": 320,
+            "range_at_80_percent_km": 280,
+            "range_at_100_percent_km": 400,
+        }))),
 
-        // API Endpoints - Battery Health
+        // API Endpoints - Battery Health (JSON)
         (Method::Get, "/api/battery/health") => {
             let health = BatteryHealth {
                 capacity_percentage: 98,
@@ -244,23 +239,71 @@ fn handle_request(req: Request) -> anyhow::Result<impl IntoResponse> {
                 temperature_celsius: 22.5,
             };
 
-            Ok(html_response(&render_battery_health(&health)))
+            Ok(json_response(&serde_json::to_value(&health)?))
         }
 
-        // API Endpoints - Charging History
-        (Method::Get, "/api/charging/history") => Ok(html_response(&render_charging_history())),
+        // API Endpoints - Charging History (JSON)
+        (Method::Get, "/api/charging/history") => Ok(json_response(&json!([
+            {
+                "date": "Today, 08:30",
+                "start_level": 45,
+                "end_level": 100,
+                "duration_minutes": 135,
+                "energy_kwh": 35.5
+            },
+            {
+                "date": "Yesterday, 19:45",
+                "start_level": 20,
+                "end_level": 80,
+                "duration_minutes": 90,
+                "energy_kwh": 42.0
+            },
+            {
+                "date": "2 days ago, 10:15",
+                "start_level": 55,
+                "end_level": 100,
+                "duration_minutes": 105,
+                "energy_kwh": 32.5
+            }
+        ]))),
 
-        // API Endpoints - Active Alerts
-        (Method::Get, "/api/alerts/active") => Ok(html_response(&render_active_alerts())),
+        // API Endpoints - Active Alerts (JSON)
+        (Method::Get, "/api/alerts/active") => Ok(json_response(&json!([
+            {
+                "type": "success",
+                "title": "Charging Complete",
+                "message": "Your vehicle is fully charged and ready to go!",
+                "time_ago": "5 minutes ago"
+            },
+            {
+                "type": "info",
+                "title": "Optimal Charge Level Reached",
+                "message": "Battery at 80% - optimal for battery longevity",
+                "time_ago": "2 hours ago"
+            }
+        ]))),
 
-        // API Endpoints - Analytics
-        (Method::Get, "/api/analytics/weekly") => Ok(html_response(&render_weekly_analytics())),
+        // API Endpoints - Analytics - Weekly (JSON)
+        (Method::Get, "/api/analytics/weekly") => Ok(json_response(&json!({
+            "charging_sessions": 7,
+            "total_energy_kwh": 245,
+            "avg_duration_minutes": 155
+        }))),
 
-        (Method::Get, "/api/analytics/costs") => Ok(html_response(&render_cost_analytics())),
+        // API Endpoints - Analytics - Costs (JSON)
+        (Method::Get, "/api/analytics/costs") => Ok(json_response(&json!({
+            "this_week_cost": 42.50,
+            "per_session_avg": 6.08,
+            "avg_price_per_kwh": 0.173,
+            "currency": "EUR"
+        }))),
 
-        (Method::Get, "/api/analytics/efficiency") => {
-            Ok(html_response(&render_efficiency_analytics()))
-        }
+        // API Endpoints - Analytics - Efficiency (JSON)
+        (Method::Get, "/api/analytics/efficiency") => Ok(json_response(&json!({
+            "charging_efficiency_percent": 92,
+            "avg_consumption_kwh_per_100km": 18.5,
+            "battery_health_percent": 98
+        }))),
 
         // POST Endpoints - Actions
         (Method::Post, "/api/charging/start") => Ok(json_response(&json!({
@@ -389,23 +432,6 @@ fn serve_static_file(
         .build())
 }
 
-/// Creates an HTML response for HTMX fragments
-///
-/// Used for endpoints that return HTML fragments to be swapped into the page
-/// by HTMX. The response includes UTF-8 charset specification.
-///
-/// ## Arguments
-/// * `html` - The HTML content to return
-///
-/// ## Returns
-/// HTTP 200 response with HTML content type
-fn html_response(html: &str) -> spin_sdk::http::Response {
-    ResponseBuilder::new(200)
-        .header("content-type", "text/html; charset=utf-8")
-        .body(html)
-        .build()
-}
-
 /// Creates a JSON response
 ///
 /// Used for API endpoints that return structured data (e.g., action confirmations,
@@ -450,285 +476,4 @@ fn json_response_with_security(value: &serde_json::Value) -> spin_sdk::http::Res
         .header("Cache-Control", "no-store, no-cache, must-revalidate")
         .body(value.to_string())
         .build()
-}
-
-// ============================================================================
-// HTML Rendering Functions
-// ============================================================================
-// These functions generate HTML fragments for HTMX to swap into the page.
-// They use inline CSS for styling where needed and follow the Toyota design system.
-
-/// Renders vehicle status as an HTML fragment
-///
-/// Creates a comprehensive vehicle status display including battery level indicator,
-/// VIN, range, and current charging/parking status.
-///
-/// ## Arguments
-/// * `status` - Current vehicle status data
-///
-/// ## Returns
-/// HTML string with vehicle status markup
-fn render_vehicle_status(status: &VehicleStatus) -> String {
-    format!(
-        r#"<div>
-            <h2>Vehicle Status</h2>
-            <div class="battery-indicator">
-                <div class="battery-icon">
-                    <div class="battery-level" style="width: {}%"></div>
-                </div>
-                <div class="battery-percentage">{}%</div>
-            </div>
-            <div class="status-grid">
-                <div class="stat">
-                    <div class="stat-label">VIN</div>
-                    <div class="stat-value">{}</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-label">Range</div>
-                    <div class="stat-value">{} km</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-label">Status</div>
-                    <div class="stat-value">{}</div>
-                </div>
-            </div>
-        </div>"#,
-        status.battery_level,
-        status.battery_level,
-        status.vin,
-        status.range_km,
-        if status.is_charging {
-            "⚡ Charging"
-        } else {
-            "🅿️ Parked"
-        }
-    )
-}
-
-/// Renders charging status as an HTML fragment
-///
-/// Displays current charging session information including progress bar,
-/// power delivery, time remaining, and charge rate.
-///
-/// ## Arguments
-/// * `status` - Current charging status data
-///
-/// ## Returns
-/// HTML string with charging status markup including progress visualization
-fn render_charging_status(status: &ChargingStatus) -> String {
-    let time_remaining = status
-        .time_remaining_minutes
-        .map(|mins| format!("{} min", mins))
-        .unwrap_or_else(|| "N/A".to_string());
-
-    format!(
-        r#"<div>
-            <h2>Charging Status</h2>
-            <div class="charging-progress">
-                <div class="progress-bar">
-                    <div class="progress-fill" style="width: {}%"></div>
-                </div>
-                <div style="margin-top: 10px; font-size: 14px;">
-                    {}% → {}% target
-                </div>
-            </div>
-            <div class="charging-stats">
-                <div class="stat">
-                    <div class="stat-value">{:.1} kW</div>
-                    <div class="stat-label">Power</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">{}</div>
-                    <div class="stat-label">Time Left</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">{:.1} kWh</div>
-                    <div class="stat-label">Rate</div>
-                </div>
-            </div>
-        </div>"#,
-        status.current_level,
-        status.current_level,
-        status.target_level,
-        status.power_kw,
-        time_remaining,
-        status.charge_rate_kwh
-    )
-}
-
-/// Renders battery health metrics as an HTML fragment
-///
-/// Shows battery capacity, health status, charge cycles, and temperature
-/// in an easy-to-read format with visual emphasis on the health percentage.
-///
-/// ## Arguments
-/// * `health` - Battery health data
-///
-/// ## Returns
-/// HTML string with battery health metrics
-fn render_battery_health(health: &BatteryHealth) -> String {
-    format!(
-        r#"<div>
-            <div class="health-status" style="text-align: center; margin: 20px 0;">
-                <div style="font-size: 48px; font-weight: 700; color: var(--success-color);">
-                    {}%
-                </div>
-                <div style="font-size: 18px; margin-top: 10px;">
-                    {} Health
-                </div>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
-                <div class="stat">
-                    <div class="stat-label">Charge Cycles</div>
-                    <div class="stat-value">{}</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-label">Temperature</div>
-                    <div class="stat-value">{:.1}°C</div>
-                </div>
-            </div>
-        </div>"#,
-        health.capacity_percentage, health.health_status, health.cycles, health.temperature_celsius
-    )
-}
-
-/// Renders recent charging history as an HTML fragment
-///
-/// Shows a list of recent charging sessions with date, time, duration,
-/// and energy consumed. Currently uses demo data - would be replaced
-/// with actual historical data from a database.
-///
-/// ## Returns
-/// HTML string with charging history list and embedded styles
-fn render_charging_history() -> String {
-    r#"<div class="history-list">
-        <div class="history-item">
-            <div><strong>Today, 08:30</strong></div>
-            <div>45% → 100% | 2h 15min | 35.5 kWh</div>
-        </div>
-        <div class="history-item">
-            <div><strong>Yesterday, 19:45</strong></div>
-            <div>20% → 80% | 1h 30min | 42.0 kWh</div>
-        </div>
-        <div class="history-item">
-            <div><strong>2 days ago, 10:15</strong></div>
-            <div>55% → 100% | 1h 45min | 32.5 kWh</div>
-        </div>
-    </div>
-    <style>
-        .history-list { display: flex; flex-direction: column; gap: 10px; }
-        .history-item { padding: 12px; background: var(--background); border-radius: 8px; }
-        .history-item div:last-child { font-size: 13px; color: var(--text-secondary); margin-top: 5px; }
-    </style>"#.to_string()
-}
-
-/// Renders active charging alerts as an HTML fragment
-///
-/// Displays current active alerts and notifications related to charging,
-/// battery status, and vehicle readiness. Alerts are styled with different
-/// colors based on their type (success, warning, info).
-///
-/// ## Returns
-/// HTML string with alerts list and embedded styles
-fn render_active_alerts() -> String {
-    r#"<div class="alerts-list">
-        <div class="alert-item success">
-            <div><strong>Charging Complete</strong></div>
-            <div>Your vehicle is fully charged and ready to go!</div>
-            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 5px;">5 minutes ago</div>
-        </div>
-        <div class="alert-item">
-            <div><strong>Optimal Charge Level Reached</strong></div>
-            <div>Battery at 80% - optimal for battery longevity</div>
-            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 5px;">2 hours ago</div>
-        </div>
-    </div>
-    <style>
-        .alerts-list { display: flex; flex-direction: column; gap: 10px; }
-        .alert-item.success { border-left-color: var(--success-color); }
-    </style>"#.to_string()
-}
-
-/// Renders weekly charging statistics as an HTML fragment
-///
-/// Shows aggregated charging data for the past week including number of
-/// sessions, total energy consumed, and average session duration.
-///
-/// ## Returns
-/// HTML string with weekly statistics
-fn render_weekly_analytics() -> String {
-    r#"<div>
-        <h3>Weekly Charging Stats</h3>
-        <div style="margin: 20px 0;">
-            <div class="stat">
-                <div class="stat-value">7</div>
-                <div class="stat-label">Charging Sessions</div>
-            </div>
-            <div class="stat" style="margin-top: 15px;">
-                <div class="stat-value">245 kWh</div>
-                <div class="stat-label">Total Energy</div>
-            </div>
-            <div class="stat" style="margin-top: 15px;">
-                <div class="stat-value">2h 35min</div>
-                <div class="stat-label">Avg. Duration</div>
-            </div>
-        </div>
-    </div>"#
-        .to_string()
-}
-
-/// Renders charging cost analysis as an HTML fragment
-///
-/// Displays cost breakdown for charging sessions including weekly/monthly totals,
-/// average cost per session, and average price per kWh.
-///
-/// ## Returns
-/// HTML string with cost analysis metrics
-fn render_cost_analytics() -> String {
-    r#"<div>
-        <h3>Cost Analysis</h3>
-        <div style="margin: 20px 0;">
-            <div class="stat">
-                <div class="stat-value">€42.50</div>
-                <div class="stat-label">This Week</div>
-            </div>
-            <div class="stat" style="margin-top: 15px;">
-                <div class="stat-value">€6.08</div>
-                <div class="stat-label">Per Session Avg.</div>
-            </div>
-            <div class="stat" style="margin-top: 15px;">
-                <div class="stat-value">€0.173/kWh</div>
-                <div class="stat-label">Avg. Price</div>
-            </div>
-        </div>
-    </div>"#
-        .to_string()
-}
-
-/// Renders energy efficiency metrics as an HTML fragment
-///
-/// Shows vehicle efficiency data including charging efficiency, average
-/// consumption per 100km, and battery health percentage.
-///
-/// ## Returns
-/// HTML string with efficiency metrics
-fn render_efficiency_analytics() -> String {
-    r#"<div>
-        <h3>Efficiency Metrics</h3>
-        <div style="margin: 20px 0;">
-            <div class="stat">
-                <div class="stat-value">92%</div>
-                <div class="stat-label">Charging Efficiency</div>
-            </div>
-            <div class="stat" style="margin-top: 15px;">
-                <div class="stat-value">18.5 kWh/100km</div>
-                <div class="stat-label">Avg. Consumption</div>
-            </div>
-            <div class="stat" style="margin-top: 15px;">
-                <div class="stat-value">98%</div>
-                <div class="stat-label">Battery Health</div>
-            </div>
-        </div>
-    </div>"#
-        .to_string()
 }
