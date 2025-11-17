@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 /**
  * Dashboard E2E Tests
- * Tests the main HTMX dashboard interface
+ * Tests the main dashboard interface with JSON API + vanilla JavaScript client-side rendering
  */
 
 test.describe('Dashboard', () => {
@@ -30,8 +30,8 @@ test.describe('Dashboard', () => {
   test('should display charging status when charging', async ({ page }) => {
     const chargingCard = page.locator('.charging-card');
 
-    // Wait for HTMX to load charging status
-    await page.waitForSelector('.charging-card', { timeout: 10000 });
+    // Wait for JavaScript to load charging status
+    await page.waitForSelector('.charging-card #charging-status', { timeout: 10000 });
 
     if (await chargingCard.isVisible()) {
       // If charging, should show power and time remaining
@@ -44,10 +44,10 @@ test.describe('Dashboard', () => {
     // Get initial battery level
     const initialBattery = await page.locator('.battery-percentage').textContent();
 
-    // Wait for HTMX refresh (5 seconds)
+    // Wait for JavaScript auto-refresh (5 seconds)
     await page.waitForTimeout(6000);
 
-    // Content should have been refreshed (HTMX polling)
+    // Content should have been refreshed (JavaScript setInterval)
     const statusCard = page.locator('.status-card');
     await expect(statusCard).toBeVisible();
 
@@ -67,30 +67,31 @@ test.describe('Dashboard', () => {
   });
 
   test('should have quick actions', async ({ page }) => {
-    const quickActions = page.locator('.quick-actions');
-    await expect(quickActions).toBeVisible();
+    const actionsCard = page.locator('.actions-card');
+    await expect(actionsCard).toBeVisible();
 
-    // Should have charging control button
-    await expect(page.getByRole('button', { name: /Start|Stop/ })).toBeVisible();
+    // Should have charging control buttons
+    await expect(page.getByRole('button', { name: /Start Charging/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Stop Charging/ })).toBeVisible();
 
     // Should have pre-condition button
-    await expect(page.getByRole('button', { name: /Pre-condition/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Pre-Condition/ })).toBeVisible();
   });
 
   test('should navigate between sections', async ({ page }) => {
     // Click on Alerts tab
     await page.click('text=Alerts');
-    const alertsSection = page.locator('#alerts-section');
+    const alertsSection = page.locator('#alerts');
     await expect(alertsSection).toHaveClass(/active/);
 
     // Click on Analytics tab
     await page.click('text=Analytics');
-    const analyticsSection = page.locator('#analytics-section');
+    const analyticsSection = page.locator('#analytics');
     await expect(analyticsSection).toHaveClass(/active/);
 
     // Click back to Dashboard
     await page.click('text=Dashboard');
-    const dashboardSection = page.locator('#dashboard-section');
+    const dashboardSection = page.locator('#dashboard');
     await expect(dashboardSection).toHaveClass(/active/);
   });
 
@@ -104,7 +105,7 @@ test.describe('Dashboard', () => {
 
     // Navigation should work
     await page.click('text=Settings');
-    const settingsSection = page.locator('#settings-section');
+    const settingsSection = page.locator('#settings');
     await expect(settingsSection).toBeVisible();
   });
 
