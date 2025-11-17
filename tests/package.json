@@ -1,0 +1,24 @@
+{
+  "name": "myt2abrp-tests",
+  "version": "1.0.0",
+  "description": "End-to-end and integration tests for MyT2ABRP",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:ui": "playwright test --ui",
+    "test:report": "playwright show-report",
+    "test:web-ui": "playwright test tests/web-ui",
+    "test:api": "playwright test tests/api",
+    "test:integration": "playwright test tests/integration"
+  },
+  "keywords": ["toyota", "ev", "abrp", "testing", "playwright"],
+  "author": "Ralf Anton Beier <ralf_beier@me.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.45.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+}

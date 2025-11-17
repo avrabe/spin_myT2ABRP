@@ -43,7 +43,8 @@ struct BatteryHealth {
     temperature_celsius: f32,
 }
 
-// Alert Configuration
+// Alert Configuration (reserved for future POST /api/alerts/save implementation)
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct AlertConfig {
     charge_complete: bool,
