@@ -1,0 +1,17 @@
+// Toyota MyT2ABRP Gateway - WebAssembly Component Model P2
+//
+// This is the gateway world that exports HTTP handler functionality
+// Future: Will import business logic components via WAC composition
+
+package toyota:gateway@0.1.0;
+
+world gateway {
+    // Export standard WASI HTTP handler
+    export wasi:http/incoming-handler@0.2.0;
+
+    // Future WAC imports (currently stubbed):
+    // import toyota:validation/validator@0.1.0;
+    // import toyota:business-logic/jwt@0.1.0;
+    // import toyota:data-transform/converter@0.1.0;
+    // import toyota:metrics/collector@0.1.0;
+}
