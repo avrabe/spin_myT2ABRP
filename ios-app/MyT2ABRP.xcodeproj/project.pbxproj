@@ -1,0 +1,13 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+		/* MyT2ABRP iOS App - Xcode Project */
+		/* Target: iOS 17.0+ */
+		/* Features: Charging alerts, Battery health, Route integration, watchOS companion */
+	};
+	rootObject = /* MyT2ABRP */ 12345678;
+}

@@ -11,3 +11,9 @@
 2025-11-17T05:03:38+00:00|END|Task 950: Create WAC composition example
 2025-11-17T05:03:47+00:00|START|Task 999: Commit and push all deliverables
 2025-11-17T05:05:55+00:00|END|Task 999: Commit and push all deliverables
+2025-11-17T05:10:00+00:00|START|Session 2: Static web + HTMX + iOS/watchOS app development
+2025-11-17T05:19:40+00:00|START|Research Spin static file serving
+2025-11-17T05:19:44+00:00|END|Research Spin static file serving
+2025-11-17T05:21:01+00:00|START|Create web UI component with HTMX
+2025-11-17T05:22:25+00:00|END|Create web UI component with HTMX
+2025-11-17T05:22:39+00:00|START|Build web UI component

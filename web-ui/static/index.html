@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toyota MyT to ABRP - Dashboard</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://unpkg.com/htmx.org/dist/ext/sse.js"></script>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <svg width="40" height="40" viewBox="0 0 40 40">
+                    <circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="2"/>
+                    <path d="M12 20 L18 26 L28 14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                </svg>
+                <h1>Toyota MyT<span class="accent">2</span>ABRP</h1>
+            </div>
+            <nav>
+                <button class="nav-btn active" onclick="showSection('dashboard')">Dashboard</button>
+                <button class="nav-btn" onclick="showSection('alerts')">Alerts</button>
+                <button class="nav-btn" onclick="showSection('analytics')">Analytics</button>
+                <button class="nav-btn" onclick="showSection('settings')">Settings</button>
+            </nav>
+        </header>
+
+        <!-- Main Dashboard -->
+        <main id="dashboard" class="section active">
+            <div class="grid">
+                <!-- Vehicle Status Card -->
+                <div class="card status-card"
+                     hx-get="/api/vehicle/status"
+                     hx-trigger="load, every 5s"
+                     hx-swap="innerHTML">
+                    <div class="loading">Loading vehicle status...</div>
+                </div>
+
+                <!-- Charging Status Card -->
+                <div class="card charging-card"
+                     hx-get="/api/charging/status"
+                     hx-trigger="load, every 2s"
+                     hx-swap="innerHTML">
+                    <div class="loading">Loading charging status...</div>
+                </div>
+
+                <!-- Range Card -->
+                <div class="card range-card">
+                    <h2>Range Information</h2>
+                    <div hx-get="/api/range"
+                         hx-trigger="load, every 10s"
+                         hx-swap="innerHTML">
+                        <div class="loading">Calculating range...</div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="card actions-card">
+                    <h2>Quick Actions</h2>
+                    <div class="actions">
+                        <button class="action-btn"
+                                hx-post="/api/charging/start"
+                                hx-swap="none"
+                                hx-indicator=".charging-indicator">
+                            <span class="icon">🔌</span>
+                            Start Charging
+                        </button>
+                        <button class="action-btn"
+                                hx-post="/api/charging/stop"
+                                hx-swap="none">
+                            <span class="icon">⏸️</span>
+                            Stop Charging
+                        </button>
+                        <button class="action-btn"
+                                hx-post="/api/precondition"
+                                hx-swap="none">
+                            <span class="icon">❄️</span>
+                            Pre-Condition
+                        </button>
+                        <button class="action-btn"
+                                hx-get="/api/route/plan"
+                                hx-target="#route-modal"
+                                hx-swap="innerHTML">
+                            <span class="icon">🗺️</span>
+                            Plan Route
+                        </button>
+                    </div>
+                    <div class="charging-indicator htmx-indicator">
+                        <div class="spinner"></div>
+                    </div>
+                </div>
+
+                <!-- Charging History -->
+                <div class="card history-card">
+                    <h2>Recent Charging Sessions</h2>
+                    <div hx-get="/api/charging/history"
+                         hx-trigger="load"
+                         hx-swap="innerHTML">
+                        <div class="loading">Loading history...</div>
+                    </div>
+                </div>
+
+                <!-- Battery Health -->
+                <div class="card health-card">
+                    <h2>Battery Health</h2>
+                    <div hx-get="/api/battery/health"
+                         hx-trigger="load, every 60s"
+                         hx-swap="innerHTML">
+                        <div class="loading">Checking battery health...</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Alerts Section -->
+        <section id="alerts" class="section">
+            <div class="section-header">
+                <h2>Charging Alerts</h2>
+                <button class="btn-primary"
+                        hx-get="/api/alerts/config"
+                        hx-target="#alert-config"
+                        hx-swap="innerHTML">
+                    Configure Alerts
+                </button>
+            </div>
+
+            <div class="alerts-container">
+                <!-- Active Alerts -->
+                <div class="card">
+                    <h3>Active Alerts</h3>
+                    <div hx-get="/api/alerts/active"
+                         hx-trigger="load, every 3s"
+                         hx-swap="innerHTML">
+                        <div class="loading">Loading alerts...</div>
+                    </div>
+                </div>
+
+                <!-- Alert Configuration -->
+                <div id="alert-config" class="card">
+                    <h3>Alert Settings</h3>
+                    <form hx-post="/api/alerts/save"
+                          hx-swap="none"
+                          hx-on::after-request="showNotification('Settings saved!')">
+
+                        <label>
+                            <input type="checkbox" name="charge_complete" checked>
+                            Notify when charging is complete (100%)
+                        </label>
+
+                        <label>
+                            <input type="checkbox" name="optimal_charge" checked>
+                            Notify at optimal charge level (80%)
+                        </label>
+
+                        <label>
+                            Custom charge level:
+                            <input type="range" name="custom_level" min="50" max="100" value="90"
+                                   oninput="this.nextElementSibling.textContent = this.value + '%'">
+                            <span class="value">90%</span>
+                        </label>
+
+                        <label>
+                            <input type="checkbox" name="low_battery">
+                            Low battery warning (below 20%)
+                        </label>
+
+                        <label>
+                            <input type="checkbox" name="charging_slow">
+                            Slow charging alert
+                        </label>
+
+                        <label>
+                            <input type="checkbox" name="ready_for_trip">
+                            Ready for trip notification
+                        </label>
+
+                        <button type="submit" class="btn-primary">Save Settings</button>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- Analytics Section -->
+        <section id="analytics" class="section">
+            <h2>Charging Analytics</h2>
+            <div class="grid analytics-grid">
+                <!-- Charts will be loaded here -->
+                <div class="card"
+                     hx-get="/api/analytics/weekly"
+                     hx-trigger="load"
+                     hx-swap="innerHTML">
+                    <div class="loading">Loading weekly stats...</div>
+                </div>
+
+                <div class="card"
+                     hx-get="/api/analytics/costs"
+                     hx-trigger="load"
+                     hx-swap="innerHTML">
+                    <div class="loading">Loading cost analysis...</div>
+                </div>
+
+                <div class="card"
+                     hx-get="/api/analytics/efficiency"
+                     hx-trigger="load"
+                     hx-swap="innerHTML">
+                    <div class="loading">Loading efficiency metrics...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Settings Section -->
+        <section id="settings" class="section">
+            <h2>Settings</h2>
+            <div class="settings-container">
+                <div class="card">
+                    <h3>Vehicle Configuration</h3>
+                    <form hx-post="/api/settings/vehicle"
+                          hx-swap="none">
+                        <label>
+                            VIN:
+                            <input type="text" name="vin" placeholder="TESTVIN123456789">
+                        </label>
+                        <label>
+                            Battery Capacity (kWh):
+                            <input type="number" name="capacity" value="75">
+                        </label>
+                        <button type="submit" class="btn-primary">Save</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h3>API Configuration</h3>
+                    <form hx-post="/api/settings/api"
+                          hx-swap="none">
+                        <label>
+                            Toyota API Token:
+                            <input type="password" name="toyota_token">
+                        </label>
+                        <label>
+                            ABRP API Key:
+                            <input type="password" name="abrp_key">
+                        </label>
+                        <button type="submit" class="btn-primary">Save</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h3>Notification Preferences</h3>
+                    <form hx-post="/api/settings/notifications"
+                          hx-swap="none">
+                        <label>
+                            <input type="checkbox" name="push_enabled" checked>
+                            Enable push notifications
+                        </label>
+                        <label>
+                            <input type="checkbox" name="email_enabled">
+                            Enable email notifications
+                        </label>
+                        <label>
+                            <input type="checkbox" name="sms_enabled">
+                            Enable SMS notifications
+                        </label>
+                        <button type="submit" class="btn-primary">Save</button>
+                    </form>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Modal for route planning -->
+    <div id="route-modal" class="modal"></div>
+
+    <!-- Notification Toast -->
+    <div id="notification" class="notification"></div>
+
+    <script src="/app.js"></script>
+</body>
+</html>
