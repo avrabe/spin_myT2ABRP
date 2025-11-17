@@ -2,106 +2,154 @@ import { test, expect } from '@playwright/test';
 
 /**
  * API Endpoint Tests
- * Tests all API endpoints for correctness and performance
+ * Tests all JSON API endpoints for correctness and performance
+ * Architecture: Clean JSON API with client-side rendering (vanilla JavaScript)
  */
 
 test.describe('API Endpoints', () => {
-  test('GET /api/vehicle/status should return HTML fragment', async ({ request }) => {
+  test('GET /api/vehicle/status should return JSON', async ({ request }) => {
     const response = await request.get('/api/vehicle/status');
 
     expect(response.ok()).toBeTruthy();
     expect(response.status()).toBe(200);
 
     const contentType = response.headers()['content-type'];
-    expect(contentType).toContain('text/html');
+    expect(contentType).toContain('application/json');
 
-    const body = await response.text();
-    expect(body).toContain('Vehicle Status');
-    expect(body).toContain('%'); // Battery percentage
-    expect(body).toContain('km'); // Range
+    const body = await response.json();
+    expect(body).toHaveProperty('vin');
+    expect(body).toHaveProperty('battery_level');
+    expect(body).toHaveProperty('range_km');
+    expect(body).toHaveProperty('is_charging');
+    expect(body).toHaveProperty('is_connected');
+    expect(body.battery_level).toBeGreaterThanOrEqual(0);
+    expect(body.battery_level).toBeLessThanOrEqual(100);
   });
 
-  test('GET /api/charging/status should return charging info', async ({ request }) => {
+  test('GET /api/charging/status should return JSON charging info', async ({ request }) => {
     const response = await request.get('/api/charging/status');
 
     expect(response.ok()).toBeTruthy();
     expect(response.status()).toBe(200);
 
-    const body = await response.text();
-    expect(body).toContain('Charging');
-    expect(body).toContain('kW'); // Power
+    const contentType = response.headers()['content-type'];
+    expect(contentType).toContain('application/json');
+
+    const body = await response.json();
+    expect(body).toHaveProperty('is_charging');
+    expect(body).toHaveProperty('current_level');
+    expect(body).toHaveProperty('target_level');
+    expect(body).toHaveProperty('power_kw');
+    expect(body).toHaveProperty('charge_rate_kwh');
   });
 
-  test('GET /api/range should return range information', async ({ request }) => {
+  test('GET /api/range should return JSON range information', async ({ request }) => {
     const response = await request.get('/api/range');
 
     expect(response.ok()).toBeTruthy();
 
-    const body = await response.text();
-    expect(body).toContain('km');
-    expect(body).toContain('Range');
+    const contentType = response.headers()['content-type'];
+    expect(contentType).toContain('application/json');
+
+    const body = await response.json();
+    expect(body).toHaveProperty('estimated_range_km');
+    expect(body).toHaveProperty('range_at_80_percent_km');
+    expect(body).toHaveProperty('range_at_100_percent_km');
   });
 
-  test('GET /api/battery/health should return health metrics', async ({ request }) => {
+  test('GET /api/battery/health should return JSON health metrics', async ({ request }) => {
     const response = await request.get('/api/battery/health');
 
     expect(response.ok()).toBeTruthy();
 
-    const body = await response.text();
-    expect(body).toContain('Health');
-    expect(body).toContain('%');
-    expect(body).toContain('Cycle'); // Charge cycles
-    expect(body).toContain('°C'); // Temperature
+    const contentType = response.headers()['content-type'];
+    expect(contentType).toContain('application/json');
+
+    const body = await response.json();
+    expect(body).toHaveProperty('capacity_percentage');
+    expect(body).toHaveProperty('health_status');
+    expect(body).toHaveProperty('cycles');
+    expect(body).toHaveProperty('temperature_celsius');
   });
 
-  test('GET /api/charging/history should return session list', async ({ request }) => {
+  test('GET /api/charging/history should return JSON session list', async ({ request }) => {
     const response = await request.get('/api/charging/history');
 
     expect(response.ok()).toBeTruthy();
 
-    const body = await response.text();
-    expect(body).toContain('history');
-    expect(body).toContain('%'); // Battery levels
-    expect(body).toContain('kWh'); // Energy
+    const contentType = response.headers()['content-type'];
+    expect(contentType).toContain('application/json');
+
+    const body = await response.json();
+    expect(Array.isArray(body)).toBeTruthy();
+    if (body.length > 0) {
+      expect(body[0]).toHaveProperty('date');
+      expect(body[0]).toHaveProperty('start_level');
+      expect(body[0]).toHaveProperty('end_level');
+      expect(body[0]).toHaveProperty('duration_minutes');
+      expect(body[0]).toHaveProperty('energy_kwh');
+    }
   });
 
-  test('GET /api/alerts/active should return active alerts', async ({ request }) => {
+  test('GET /api/alerts/active should return JSON active alerts', async ({ request }) => {
     const response = await request.get('/api/alerts/active');
 
     expect(response.ok()).toBeTruthy();
 
-    const body = await response.text();
-    expect(body).toContain('alert');
+    const contentType = response.headers()['content-type'];
+    expect(contentType).toContain('application/json');
+
+    const body = await response.json();
+    expect(Array.isArray(body)).toBeTruthy();
+    if (body.length > 0) {
+      expect(body[0]).toHaveProperty('type');
+      expect(body[0]).toHaveProperty('title');
+      expect(body[0]).toHaveProperty('message');
+      expect(body[0]).toHaveProperty('time_ago');
+    }
   });
 
-  test('GET /api/analytics/weekly should return weekly stats', async ({ request }) => {
+  test('GET /api/analytics/weekly should return JSON weekly stats', async ({ request }) => {
     const response = await request.get('/api/analytics/weekly');
 
     expect(response.ok()).toBeTruthy();
 
-    const body = await response.text();
-    expect(body).toContain('Weekly');
-    expect(body).toContain('kWh');
+    const contentType = response.headers()['content-type'];
+    expect(contentType).toContain('application/json');
+
+    const body = await response.json();
+    expect(body).toHaveProperty('charging_sessions');
+    expect(body).toHaveProperty('total_energy_kwh');
+    expect(body).toHaveProperty('avg_duration_minutes');
   });
 
-  test('GET /api/analytics/costs should return cost analysis', async ({ request }) => {
+  test('GET /api/analytics/costs should return JSON cost analysis', async ({ request }) => {
     const response = await request.get('/api/analytics/costs');
 
     expect(response.ok()).toBeTruthy();
 
-    const body = await response.text();
-    expect(body).toContain('Cost');
-    expect(body).toContain('€');
+    const contentType = response.headers()['content-type'];
+    expect(contentType).toContain('application/json');
+
+    const body = await response.json();
+    expect(body).toHaveProperty('this_week_cost');
+    expect(body).toHaveProperty('per_session_avg');
+    expect(body).toHaveProperty('avg_price_per_kwh');
+    expect(body).toHaveProperty('currency');
   });
 
-  test('GET /api/analytics/efficiency should return efficiency metrics', async ({ request }) => {
+  test('GET /api/analytics/efficiency should return JSON efficiency metrics', async ({ request }) => {
     const response = await request.get('/api/analytics/efficiency');
 
     expect(response.ok()).toBeTruthy();
 
-    const body = await response.text();
-    expect(body).toContain('Efficiency');
-    expect(body).toContain('%');
+    const contentType = response.headers()['content-type'];
+    expect(contentType).toContain('application/json');
+
+    const body = await response.json();
+    expect(body).toHaveProperty('charging_efficiency_percent');
+    expect(body).toHaveProperty('avg_consumption_kwh_per_100km');
+    expect(body).toHaveProperty('battery_health_percent');
   });
 
   test('POST /api/charging/start should return success', async ({ request }) => {
