@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+#
+# Git Pre-commit Hook for MyT2ABRP
+#
+# Automatically runs before each commit to ensure code quality.
+# Prevents commits that would fail CI/CD.
+#
+# Installation:
+#   ln -s ../../git-hooks/pre-commit .git/hooks/pre-commit
+
+set -e
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+echo -e "${BLUE}Running pre-commit checks...${NC}"
+echo ""
+
+# Check 1: Rust formatting
+if command -v cargo &> /dev/null; then
+    echo -e "${BLUE}[1/5]${NC} Checking Rust formatting..."
+    cd web-ui
+    if cargo fmt -- --check > /dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC} Rust code is properly formatted"
+    else
+        echo -e "${RED}✗${NC} Rust code needs formatting!"
+        echo "      Run: make format"
+        cd ..
+        exit 1
+    fi
+    cd ..
+fi
+
+# Check 2: Clippy lints
+if command -v cargo &> /dev/null; then
+    echo -e "${BLUE}[2/5]${NC} Running Clippy..."
+    cd web-ui
+    if cargo clippy --target wasm32-wasip2 -- -D warnings > /dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC} Clippy checks passed"
+    else
+        echo -e "${YELLOW}⚠${NC} Clippy found issues (warnings allowed in pre-commit)"
+    fi
+    cd ..
+fi
+
+# Check 3: Check for secrets
+echo -e "${BLUE}[3/5]${NC} Checking for secrets..."
+SECRETS_FOUND=0
+
+# Check for common secret patterns
+if git diff --cached --name-only | xargs grep -i "api[_-]key\|api[_-]secret\|password.*=" 2>/dev/null | grep -v "CHANGE-IN-PRODUCTION" | grep -v "example"; then
+    echo -e "${RED}✗${NC} Potential secrets found in staged files!"
+    echo "      Review and remove before committing"
+    SECRETS_FOUND=1
+fi
+
+if [ $SECRETS_FOUND -eq 0 ]; then
+    echo -e "${GREEN}✓${NC} No obvious secrets found"
+fi
+
+# Check 4: Check for TODOs (warning only)
+echo -e "${BLUE}[4/5]${NC} Checking for TODOs..."
+TODO_COUNT=$(git diff --cached | grep "^+.*TODO" | wc -l)
+if [ $TODO_COUNT -gt 0 ]; then
+    echo -e "${YELLOW}⚠${NC} $TODO_COUNT new TODO(s) added"
+else
+    echo -e "${GREEN}✓${NC} No new TODOs"
+fi
+
+# Check 5: Check for console.log/println! in production code
+echo -e "${BLUE}[5/5]${NC} Checking for debug statements..."
+DEBUG_COUNT=0
+
+if git diff --cached --name-only | grep "\.rs$" | xargs grep -n "println!" 2>/dev/null | grep -v "test" | grep -v "^tests/"; then
+    echo -e "${YELLOW}⚠${NC} println! found in production code"
+    DEBUG_COUNT=$((DEBUG_COUNT + 1))
+fi
+
+if [ $DEBUG_COUNT -eq 0 ]; then
+    echo -e "${GREEN}✓${NC} No debug statements in production code"
+fi
+
+echo ""
+if [ $SECRETS_FOUND -eq 1 ]; then
+    echo -e "${RED}Commit blocked due to potential secrets!${NC}"
+    exit 1
+else
+    echo -e "${GREEN}✓ All pre-commit checks passed!${NC}"
+    exit 0
+fi
