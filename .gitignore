@@ -1,7 +1,8 @@
 .spin
 
-# Uncomment the line below to get to the default state for the http-rust template
+# Rust build outputs
 target/
+**/**/target/
 crt.pem
 spin.sig
 
@@ -10,7 +11,52 @@ bazel-*
 
 # Node.js dependencies
 node_modules/
+**/node_modules/
+package-lock.json
+**/package-lock.json
+
+# Test outputs and artifacts
+test-results/
+**/test-results/
+playwright-report/
+**/playwright-report/
+tests/test-results/
+tests/playwright-report/
+*.test-artifacts/
+
+# Playwright
+.playwright/
+playwright/.auth/
 
 # Downloaded binaries
 *.tar.gz
 *.zip
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Coverage
+coverage/
+*.coverage
+.nyc_output/
+
+# Build outputs
+dist/
+build/
+*.wasm.map

@@ -19,9 +19,34 @@ cors_origin = { required = false }
 # VIN is still required unless using /vehicles endpoint only
 vin = { required = false }
 
+# Web UI Component (HTMX Dashboard)
+[[trigger.http]]
+route = "/"
+component = "web-ui"
+
+[[trigger.http]]
+route = "/styles.css"
+component = "web-ui"
+
+[[trigger.http]]
+route = "/app.js"
+component = "web-ui"
+
+[[trigger.http]]
+route = "/api/..."
+component = "web-ui"
+
+# Main API Component (Toyota Integration)
 [[trigger.http]]
 route = "/..."
 component = "myt2abrp"
+
+[component.web-ui]
+source = "web-ui/target/wasm32-wasip2/release/web_ui.wasm"
+allowed_outbound_hosts = []
+[component.web-ui.build]
+command = "cd web-ui && cargo build --target wasm32-wasip2 --release"
+watch = ["web-ui/src/**/*.rs", "web-ui/static/**/*"]
 
 [component.myt2abrp]
 source = "bazel-bin/myt2abrp_app.wasm"
