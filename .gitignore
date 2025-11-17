@@ -5,6 +5,7 @@ target/
 **/**/target/
 crt.pem
 spin.sig
+Cargo.lock
 
 # Bazel outputs
 bazel-*
@@ -44,6 +45,8 @@ playwright/.auth/
 .env
 .env.local
 .env.*.local
+.env.prod
+.env.test
 
 # Logs
 *.log
@@ -60,3 +63,42 @@ coverage/
 dist/
 build/
 *.wasm.map
+
+# Backups
+.backups/
+*.backup
+*.bak
+
+# Release artifacts
+release/
+
+# Temporary files
+.time_log
+*.tmp
+*.temp
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Docker
+.dockerignore
+
+# SSL/TLS
+*.pem
+*.key
+*.crt
+*.csr
+!ssl/.gitkeep
+
+# Monitoring data
+prometheus_data/
+grafana_data/
+loki_data/
+
+# Secrets (just in case)
+secrets/
+*.secret
+*_secret
+*.priv
