@@ -13,12 +13,18 @@
     "test:api": "playwright test tests/api",
     "test:integration": "playwright test tests/integration"
   },
-  "keywords": ["toyota", "ev", "abrp", "testing", "playwright"],
+  "keywords": [
+    "toyota",
+    "ev",
+    "abrp",
+    "testing",
+    "playwright"
+  ],
   "author": "Ralf Anton Beier <ralf_beier@me.com>",
   "license": "MIT",
   "devDependencies": {
-    "@playwright/test": "^1.45.0",
-    "@types/node": "^20.0.0",
-    "typescript": "^5.3.0"
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^20.19.25",
+    "typescript": "^5.9.3"
   }
 }

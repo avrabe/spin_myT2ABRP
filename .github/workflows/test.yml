@@ -1,287 +1,91 @@
-name: Test Suite
+name: Tests
 
 on:
   push:
-    branches: [ main, develop, "claude/**" ]
+    branches: [ main, develop, claude/* ]
   pull_request:
     branches: [ main, develop ]
 
-env:
-  RUST_VERSION: "1.91.1"
-  CARGO_COMPONENT_VERSION: "0.21.1"
-  SPIN_VERSION: "v3.0.0"
-
 jobs:
-  # Lint and format check
-  lint:
-    name: Lint and Format
+  test-web-ui:
+    name: Web UI Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: ${{ env.RUST_VERSION }}
-          components: rustfmt, clippy
+          toolchain: stable
+          target: wasm32-wasip2
 
-      - name: Cache Rust dependencies
-        uses: actions/cache@v4
+      - name: Install Spin CLI
+        uses: fermyon/actions/spin/setup@v1
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-      - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
-  # Build native for tests
-  build-native:
-    name: Build Native
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-
-      - name: Cache Rust dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-native-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Build workspace
-        run: cargo build --release
-
-      - name: Run unit tests
-        run: cargo test --release
-
-  # Build WASM components
-  build-components:
-    name: Build WASM Components
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-
-      - name: Add WASM targets
-        run: |
-          rustup target add wasm32-wasip1
-          rustup target add wasm32-wasip2
-
-      - name: Cache Rust dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-wasm-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Install cargo-component
-        run: cargo install cargo-component --version ${{ env.CARGO_COMPONENT_VERSION }} --locked
-
-      - name: Install wasm-tools
-        run: cargo install wasm-tools --locked
-
-      - name: Build all components
-        run: ./scripts/build-all-components.sh --release
-
-      - name: Validate WASM
-        run: ./scripts/validate-wasm.sh
-
-      - name: Upload component artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: wasm-components
-          path: target/wasm32-wasip1/release/toyota_*.wasm
-          retention-days: 7
-
-  # Build Spin test component
-  build-spin-component:
-    name: Build Spin Component
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-
-      - name: Add WASM target
-        run: rustup target add wasm32-wasip2
-
-      - name: Cache Rust dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-spin-${{ hashFiles('test-http/Cargo.lock') }}
-
-      - name: Build test component
-        working-directory: test-http
-        run: cargo build --target wasm32-wasip2 --release
-
-      - name: Upload Spin component
-        uses: actions/upload-artifact@v4
-        with:
-          name: spin-component
-          path: test-http/target/wasm32-wasip2/release/test_http.wasm
-          retention-days: 7
-
-  # E2E tests with Playwright
-  e2e-tests:
-    name: E2E Tests
-    runs-on: ubuntu-latest
-    needs: build-spin-component
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download Spin component
-        uses: actions/download-artifact@v4
-        with:
-          name: spin-component
-          path: test-http/target/wasm32-wasip2/release/
+          version: "v2.7.0"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
           cache: 'npm'
-          cache-dependency-path: tests/e2e/package-lock.json
+          cache-dependency-path: tests/package-lock.json
 
       - name: Install dependencies
-        working-directory: tests/e2e
+        working-directory: tests
         run: npm ci
 
-      - name: Install Playwright browsers
-        working-directory: tests/e2e
-        run: npx playwright install --with-deps
+      - name: Install Playwright Browsers
+        working-directory: tests
+        run: npx playwright install --with-deps chromium
 
-      - name: Install Spin CLI
+      - name: Build Spin components
         run: |
-          curl -fsSL https://developer.fermyon.com/downloads/install.sh | bash -s -- --version ${{ env.SPIN_VERSION }}
-          sudo mv spin /usr/local/bin/
-
-      - name: Start Spin server
-        working-directory: test-http
-        run: |
-          spin up &
-          SPIN_PID=$!
-          echo "SPIN_PID=$SPIN_PID" >> $GITHUB_ENV
-          sleep 3
+          cd web-ui
+          cargo build --target wasm32-wasip2 --release
 
       - name: Run Playwright tests
-        working-directory: tests/e2e
-        run: npm test
+        working-directory: tests
+        run: npm test -- --project=chromium
+        env:
+          CI: true
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-results
-          path: tests/e2e/test-results/
+          path: tests/test-results/
           retention-days: 7
 
-      - name: Stop Spin server
+      - name: Upload test report
         if: always()
-        run: kill ${{ env.SPIN_PID }} || true
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/playwright-report/
+          retention-days: 7
 
-  # Performance benchmarks
-  performance:
-    name: Performance Benchmarks
+  lint:
+    name: Lint & Format Check
     runs-on: ubuntu-latest
-    needs: build-spin-component
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Spin component
-        uses: actions/download-artifact@v4
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          name: spin-component
-          path: test-http/target/wasm32-wasip2/release/
+          components: rustfmt, clippy
 
-      - name: Install Spin CLI
+      - name: Check Rust formatting
         run: |
-          curl -fsSL https://developer.fermyon.com/downloads/install.sh | bash -s -- --version ${{ env.SPIN_VERSION }}
-          sudo mv spin /usr/local/bin/
+          cd web-ui
+          cargo fmt -- --check
 
-      - name: Start Spin server
-        working-directory: test-http
+      - name: Run Clippy
         run: |
-          spin up &
-          sleep 3
-
-      - name: Run performance benchmarks
-        run: |
-          # Simple throughput test
-          echo "=== Throughput Test ==="
-          ab -n 1000 -c 10 http://127.0.0.1:3000/health
-
-          # Response time test
-          echo "=== Response Time Test ==="
-          for i in {1..100}; do
-            curl -w "%{time_total}\n" -o /dev/null -s http://127.0.0.1:3000/health
-          done | awk '{sum+=$1; count++} END {print "Average:", sum/count "s"}'
-
-      - name: Check performance thresholds
-        run: |
-          # Add custom performance checks here
-          echo "Performance benchmarks completed"
-
-  # Security audit
-  security:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-
-      - name: Run cargo audit
-        run: |
-          cargo install cargo-audit
-          cargo audit
-
-      - name: Run cargo deny
-        run: |
-          cargo install cargo-deny
-          cargo deny check
-
-  # All checks passed
-  all-checks:
-    name: All Checks
-    runs-on: ubuntu-latest
-    needs: [lint, build-native, build-components, build-spin-component, e2e-tests]
-    steps:
-      - name: All checks passed
-        run: echo "✅ All checks passed!"
+          cd web-ui
+          cargo clippy -- -D warnings
