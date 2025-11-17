@@ -13,11 +13,11 @@
 // - Uses minimal dependencies for optimal WASM binary size
 // - Stateless design (all state managed externally)
 
-use spin_sdk::http::{IntoResponse, Method, Request, ResponseBuilder};
-use spin_sdk::http_component;
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use chrono::Utc;
+use spin_sdk::http::{IntoResponse, Method, Request, ResponseBuilder};
+use spin_sdk::http_component;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
@@ -187,12 +187,8 @@ fn handle_request(req: Request) -> anyhow::Result<impl IntoResponse> {
         (Method::Get, "/") | (Method::Get, "/index.html") => {
             serve_static_file("index.html", "text/html")
         }
-        (Method::Get, "/styles.css") => {
-            serve_static_file("styles.css", "text/css")
-        }
-        (Method::Get, "/app.js") => {
-            serve_static_file("app.js", "application/javascript")
-        }
+        (Method::Get, "/styles.css") => serve_static_file("styles.css", "text/css"),
+        (Method::Get, "/app.js") => serve_static_file("app.js", "application/javascript"),
 
         // API Endpoints - Vehicle Status
         (Method::Get, "/api/vehicle/status") => {
@@ -226,9 +222,8 @@ fn handle_request(req: Request) -> anyhow::Result<impl IntoResponse> {
         }
 
         // API Endpoints - Range
-        (Method::Get, "/api/range") => {
-            Ok(html_response(&format!(
-                r#"<div class="range-info">
+        (Method::Get, "/api/range") => Ok(html_response(&format!(
+            r#"<div class="range-info">
                     <div>
                         <div class="stat-label">Estimated Range</div>
                         <div class="range-value">320 km</div>
@@ -238,8 +233,7 @@ fn handle_request(req: Request) -> anyhow::Result<impl IntoResponse> {
                         <div class="stat-value">280 km</div>
                     </div>
                 </div>"#
-            )))
-        }
+        ))),
 
         // API Endpoints - Battery Health
         (Method::Get, "/api/battery/health") => {
@@ -254,65 +248,47 @@ fn handle_request(req: Request) -> anyhow::Result<impl IntoResponse> {
         }
 
         // API Endpoints - Charging History
-        (Method::Get, "/api/charging/history") => {
-            Ok(html_response(&render_charging_history()))
-        }
+        (Method::Get, "/api/charging/history") => Ok(html_response(&render_charging_history())),
 
         // API Endpoints - Active Alerts
-        (Method::Get, "/api/alerts/active") => {
-            Ok(html_response(&render_active_alerts()))
-        }
+        (Method::Get, "/api/alerts/active") => Ok(html_response(&render_active_alerts())),
 
         // API Endpoints - Analytics
-        (Method::Get, "/api/analytics/weekly") => {
-            Ok(html_response(&render_weekly_analytics()))
-        }
+        (Method::Get, "/api/analytics/weekly") => Ok(html_response(&render_weekly_analytics())),
 
-        (Method::Get, "/api/analytics/costs") => {
-            Ok(html_response(&render_cost_analytics()))
-        }
+        (Method::Get, "/api/analytics/costs") => Ok(html_response(&render_cost_analytics())),
 
         (Method::Get, "/api/analytics/efficiency") => {
             Ok(html_response(&render_efficiency_analytics()))
         }
 
         // POST Endpoints - Actions
-        (Method::Post, "/api/charging/start") => {
-            Ok(json_response(&json!({
-                "success": true,
-                "message": "Charging started"
-            })))
-        }
+        (Method::Post, "/api/charging/start") => Ok(json_response(&json!({
+            "success": true,
+            "message": "Charging started"
+        }))),
 
-        (Method::Post, "/api/charging/stop") => {
-            Ok(json_response(&json!({
-                "success": true,
-                "message": "Charging stopped"
-            })))
-        }
+        (Method::Post, "/api/charging/stop") => Ok(json_response(&json!({
+            "success": true,
+            "message": "Charging stopped"
+        }))),
 
-        (Method::Post, "/api/precondition") => {
-            Ok(json_response(&json!({
-                "success": true,
-                "message": "Pre-conditioning started"
-            })))
-        }
+        (Method::Post, "/api/precondition") => Ok(json_response(&json!({
+            "success": true,
+            "message": "Pre-conditioning started"
+        }))),
 
-        (Method::Post, "/api/alerts/save") => {
-            Ok(json_response(&json!({
-                "success": true,
-                "message": "Alert settings saved"
-            })))
-        }
+        (Method::Post, "/api/alerts/save") => Ok(json_response(&json!({
+            "success": true,
+            "message": "Alert settings saved"
+        }))),
 
-        (Method::Post, "/api/settings/vehicle") |
-        (Method::Post, "/api/settings/api") |
-        (Method::Post, "/api/settings/notifications") => {
-            Ok(json_response(&json!({
-                "success": true,
-                "message": "Settings updated"
-            })))
-        }
+        (Method::Post, "/api/settings/vehicle")
+        | (Method::Post, "/api/settings/api")
+        | (Method::Post, "/api/settings/notifications") => Ok(json_response(&json!({
+            "success": true,
+            "message": "Settings updated"
+        }))),
 
         // Health Check & Monitoring Endpoints
         (Method::Get, "/health") | (Method::Get, "/api/health") => {
@@ -391,7 +367,10 @@ fn handle_request(req: Request) -> anyhow::Result<impl IntoResponse> {
 ///
 /// ## Returns
 /// HTTP response with the file contents or 404 if file not found
-fn serve_static_file(filename: &str, content_type: &str) -> anyhow::Result<spin_sdk::http::Response> {
+fn serve_static_file(
+    filename: &str,
+    content_type: &str,
+) -> anyhow::Result<spin_sdk::http::Response> {
     let content = match filename {
         "index.html" => include_str!("../static/index.html"),
         "styles.css" => include_str!("../static/styles.css"),
@@ -518,7 +497,11 @@ fn render_vehicle_status(status: &VehicleStatus) -> String {
         status.battery_level,
         status.vin,
         status.range_km,
-        if status.is_charging { "⚡ Charging" } else { "🅿️ Parked" }
+        if status.is_charging {
+            "⚡ Charging"
+        } else {
+            "🅿️ Parked"
+        }
     )
 }
 
@@ -533,7 +516,8 @@ fn render_vehicle_status(status: &VehicleStatus) -> String {
 /// ## Returns
 /// HTML string with charging status markup including progress visualization
 fn render_charging_status(status: &ChargingStatus) -> String {
-    let time_remaining = status.time_remaining_minutes
+    let time_remaining = status
+        .time_remaining_minutes
         .map(|mins| format!("{} min", mins))
         .unwrap_or_else(|| "N/A".to_string());
 
@@ -604,10 +588,7 @@ fn render_battery_health(health: &BatteryHealth) -> String {
                 </div>
             </div>
         </div>"#,
-        health.capacity_percentage,
-        health.health_status,
-        health.cycles,
-        health.temperature_celsius
+        health.capacity_percentage, health.health_status, health.cycles, health.temperature_celsius
     )
 }
 
@@ -692,7 +673,8 @@ fn render_weekly_analytics() -> String {
                 <div class="stat-label">Avg. Duration</div>
             </div>
         </div>
-    </div>"#.to_string()
+    </div>"#
+        .to_string()
 }
 
 /// Renders charging cost analysis as an HTML fragment
@@ -719,7 +701,8 @@ fn render_cost_analytics() -> String {
                 <div class="stat-label">Avg. Price</div>
             </div>
         </div>
-    </div>"#.to_string()
+    </div>"#
+        .to_string()
 }
 
 /// Renders energy efficiency metrics as an HTML fragment
@@ -746,5 +729,6 @@ fn render_efficiency_analytics() -> String {
                 <div class="stat-label">Battery Health</div>
             </div>
         </div>
-    </div>"#.to_string()
+    </div>"#
+        .to_string()
 }
