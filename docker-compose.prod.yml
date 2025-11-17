@@ -1,0 +1,307 @@
+version: '3.8'
+
+# Production-ready Docker Compose configuration for MyT2ABRP
+# Includes application, monitoring stack, logging, and optional database
+
+services:
+  # ========================================
+  # Main Application
+  # ========================================
+  myt2abrp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: myt2abrp-app
+    ports:
+      - "3000:3000"
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
+      - HMAC_KEY=${HMAC_KEY:-dev-hmac-key-change-in-production}
+      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      - VIN=${VIN:-}
+      - PORT=3000
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - myt2abrp-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "com.myt2abrp.service=app"
+      - "com.myt2abrp.environment=production"
+
+  # ========================================
+  # Reverse Proxy & Load Balancer
+  # ========================================
+  nginx:
+    image: nginx:alpine
+    container_name: myt2abrp-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - nginx-logs:/var/log/nginx
+    depends_on:
+      - myt2abrp
+    restart: unless-stopped
+    networks:
+      - myt2abrp-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "com.myt2abrp.service=reverse-proxy"
+
+  # ========================================
+  # Monitoring Stack
+  # ========================================
+
+  # Prometheus - Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: myt2abrp-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    networks:
+      - myt2abrp-network
+    depends_on:
+      - myt2abrp
+    labels:
+      - "com.myt2abrp.service=metrics"
+
+  # Node Exporter - Host Metrics
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: myt2abrp-node-exporter
+    ports:
+      - "9100:9100"
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    restart: unless-stopped
+    networks:
+      - myt2abrp-network
+
+  # Grafana - Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: myt2abrp-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-change-me-in-production}
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource,grafana-piechart-panel
+      - GF_SERVER_ROOT_URL=http://localhost:3001
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana-dashboard.json:/etc/grafana/provisioning/dashboards/myt2abrp.json:ro
+      - ./grafana-provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana-provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+    restart: unless-stopped
+    networks:
+      - myt2abrp-network
+    depends_on:
+      - prometheus
+    labels:
+      - "com.myt2abrp.service=visualization"
+
+  # Alert Manager - Alerting
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: myt2abrp-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    restart: unless-stopped
+    networks:
+      - myt2abrp-network
+
+  # ========================================
+  # Logging Stack
+  # ========================================
+
+  # Loki - Log Aggregation
+  loki:
+    image: grafana/loki:latest
+    container_name: myt2abrp-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki-data:/loki
+      - ./loki-config.yml:/etc/loki/local-config.yaml:ro
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+    networks:
+      - myt2abrp-network
+    labels:
+      - "com.myt2abrp.service=logs"
+
+  # Promtail - Log Shipping
+  promtail:
+    image: grafana/promtail:latest
+    container_name: myt2abrp-promtail
+    volumes:
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - nginx-logs:/var/log/nginx:ro
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    restart: unless-stopped
+    networks:
+      - myt2abrp-network
+    depends_on:
+      - loki
+
+  # ========================================
+  # Cache Layer
+  # ========================================
+
+  # Redis - Caching & Session Storage
+  redis:
+    image: redis:7-alpine
+    container_name: myt2abrp-redis
+    ports:
+      - "6379:6379"
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD:-redis-secret-password-change-me}
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis-secret-password-change-me}", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    networks:
+      - myt2abrp-network
+    labels:
+      - "com.myt2abrp.service=cache"
+
+  # ========================================
+  # Database (Optional - Commented Out)
+  # ========================================
+
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: myt2abrp-postgres
+  #   ports:
+  #     - "5432:5432"
+  #   environment:
+  #     - POSTGRES_USER=${POSTGRES_USER:-myt2abrp}
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres-password-change-me}
+  #     - POSTGRES_DB=${POSTGRES_DB:-myt2abrp}
+  #     - PGDATA=/var/lib/postgresql/data/pgdata
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #     - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-myt2abrp}"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #   networks:
+  #     - myt2abrp-network
+  #   shm_size: 256mb
+  #   labels:
+  #     - "com.myt2abrp.service=database"
+
+  # backup:
+  #   image: postgres:15-alpine
+  #   container_name: myt2abrp-backup
+  #   depends_on:
+  #     - postgres
+  #   volumes:
+  #     - ./backups:/backups
+  #   environment:
+  #     - PGPASSWORD=${POSTGRES_PASSWORD:-postgres-password-change-me}
+  #   command: >
+  #     /bin/sh -c "
+  #     while true; do
+  #       pg_dump -h postgres -U ${POSTGRES_USER:-myt2abrp} ${POSTGRES_DB:-myt2abrp} > /backups/backup_$$(date +%Y%m%d_%H%M%S).sql
+  #       find /backups -type f -mtime +7 -delete
+  #       sleep 86400
+  #     done
+  #     "
+  #   networks:
+  #     - myt2abrp-network
+
+  # adminer:
+  #   image: adminer:latest
+  #   container_name: myt2abrp-adminer
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     - ADMINER_DEFAULT_SERVER=postgres
+  #   restart: unless-stopped
+  #   networks:
+  #     - myt2abrp-network
+  #   depends_on:
+  #     - postgres
+
+networks:
+  myt2abrp-network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.25.0.0/16
+          gateway: 172.25.0.1
+
+volumes:
+  prometheus-data:
+    driver: local
+  alertmanager-data:
+    driver: local
+  grafana-data:
+    driver: local
+  loki-data:
+    driver: local
+  redis-data:
+    driver: local
+  nginx-logs:
+    driver: local
+  # postgres-data:
+  #   driver: local

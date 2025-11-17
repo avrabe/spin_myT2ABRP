@@ -1,0 +1,87 @@
+# AlertManager Configuration for MyT2ABRP
+
+global:
+  resolve_timeout: 5m
+  # SMTP Configuration (uncomment and configure for email alerts)
+  # smtp_from: 'alertmanager@myt2abrp.com'
+  # smtp_smarthost: 'smtp.gmail.com:587'
+  # smtp_auth_username: 'your-email@gmail.com'
+  # smtp_auth_password: 'your-app-password'
+  # smtp_require_tls: true
+
+# Templates for notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route configuration
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  receiver: 'default'
+
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical'
+      continue: true
+
+    # Warning alerts - grouped notification
+    - match:
+        severity: warning
+      receiver: 'warning'
+      group_wait: 30s
+
+    # Info alerts - daily digest
+    - match:
+        severity: info
+      receiver: 'info'
+      repeat_interval: 24h
+
+# Receivers - notification destinations
+receivers:
+  - name: 'default'
+    # Configure your default receiver here
+    # webhook_configs:
+    #   - url: 'http://your-webhook-endpoint'
+
+  - name: 'critical'
+    # Example: Slack notifications
+    # slack_configs:
+    #   - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+    #     channel: '#alerts-critical'
+    #     title: 'Critical Alert: {{ .GroupLabels.alertname }}'
+    #     text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ end }}'
+
+    # Example: Email notifications
+    # email_configs:
+    #   - to: 'oncall@myt2abrp.com'
+    #     from: 'alertmanager@myt2abrp.com'
+    #     headers:
+    #       Subject: 'CRITICAL: {{ .GroupLabels.alertname }}'
+
+  - name: 'warning'
+    # slack_configs:
+    #   - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+    #     channel: '#alerts'
+    #     title: 'Warning: {{ .GroupLabels.alertname }}'
+
+  - name: 'info'
+    # webhook_configs:
+    #   - url: 'http://your-logging-endpoint'
+
+# Inhibition rules - suppress alerts based on other active alerts
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'cluster', 'service']
+
+  - source_match:
+      severity: 'warning'
+    target_match:
+      severity: 'info'
+    equal: ['alertname', 'cluster', 'service']
