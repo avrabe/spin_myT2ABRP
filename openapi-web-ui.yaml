@@ -1,0 +1,550 @@
+openapi: 3.0.3
+info:
+  title: MyT2ABRP Web UI API
+  version: 1.0.0
+  description: |
+    MyT2ABRP (Toyota MyT to A Better Route Planner) Web Dashboard API
+
+    A comprehensive web dashboard for Toyota electric vehicle owners with smart
+    charging management, battery health tracking, and intelligent route planning.
+
+    ## Features
+    - Real-time vehicle status updates via HTMX
+    - Smart charging controls
+    - Battery health monitoring
+    - Charging history and analytics
+    - Cost tracking and efficiency metrics
+    - PWA support for mobile
+
+    ## Authentication
+    Currently uses demo data. Future versions will support:
+    - JWT-based authentication
+    - Toyota Connected Services integration
+    - Multi-user support
+
+  contact:
+    name: Ralf Anton Beier
+    email: ralf_beier@me.com
+    url: https://github.com/avrabe/spin_myT2ABRP
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+  - url: https://your-domain.com
+    description: Production server (configure in deployment)
+
+tags:
+  - name: Static Files
+    description: Web dashboard and static assets
+  - name: Vehicle
+    description: Vehicle status and information
+  - name: Charging
+    description: Charging controls and history
+  - name: Battery
+    description: Battery health and metrics
+  - name: Analytics
+    description: Cost, efficiency, and usage analytics
+  - name: Alerts
+    description: Charging alert configuration
+  - name: Health
+    description: System health and monitoring
+
+paths:
+  /:
+    get:
+      summary: Get main dashboard
+      description: Returns the main HTMX dashboard page
+      tags:
+        - Static Files
+      responses:
+        '200':
+          description: HTML dashboard page
+          content:
+            text/html:
+              schema:
+                type: string
+                example: "<!DOCTYPE html>..."
+          headers:
+            X-Content-Type-Options:
+              schema:
+                type: string
+                example: nosniff
+            Cache-Control:
+              schema:
+                type: string
+                example: "public, max-age=3600"
+
+  /styles.css:
+    get:
+      summary: Get CSS stylesheet
+      description: Returns the Toyota-themed CSS stylesheet
+      tags:
+        - Static Files
+      responses:
+        '200':
+          description: CSS stylesheet
+          content:
+            text/css:
+              schema:
+                type: string
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: "public, max-age=3600"
+
+  /app.js:
+    get:
+      summary: Get JavaScript
+      description: Returns the minimal JavaScript for PWA and UI interactions
+      tags:
+        - Static Files
+      responses:
+        '200':
+          description: JavaScript file
+          content:
+            application/javascript:
+              schema:
+                type: string
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: "public, max-age=3600"
+
+  /health:
+    get:
+      summary: Health check
+      description: Returns service health status
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "healthy"
+                timestamp: "2025-11-17T12:00:00Z"
+                version: "1.0.0"
+                component: "web-ui"
+
+  /api/health:
+    get:
+      summary: API health check (alias)
+      description: Alias for /health endpoint
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/metrics:
+    get:
+      summary: Get performance metrics
+      description: Returns API performance and usage metrics
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Performance metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsResponse'
+              example:
+                uptime_seconds: 3600
+                requests_total: 1000
+                requests_success: 995
+                requests_error: 5
+                cache_hit_rate: 0.85
+
+  /api/vehicle/status:
+    get:
+      summary: Get vehicle status
+      description: Returns current vehicle status as HTML fragment for HTMX
+      tags:
+        - Vehicle
+      responses:
+        '200':
+          description: Vehicle status HTML fragment
+          content:
+            text/html:
+              schema:
+                type: string
+                example: |
+                  <div>
+                    <h2>Vehicle Status</h2>
+                    <div class="battery-percentage">75%</div>
+                    <div class="range">320 km</div>
+                  </div>
+
+  /api/range:
+    get:
+      summary: Get range information
+      description: Returns estimated range information
+      tags:
+        - Vehicle
+      responses:
+        '200':
+          description: Range information HTML fragment
+          content:
+            text/html:
+              schema:
+                type: string
+              example: |
+                <div>
+                  <p>Current Range: 320 km</p>
+                  <p>At 80%: 340 km</p>
+                </div>
+
+  /api/battery/health:
+    get:
+      summary: Get battery health
+      description: Returns battery health metrics
+      tags:
+        - Battery
+      responses:
+        '200':
+          description: Battery health HTML fragment
+          content:
+            text/html:
+              schema:
+                type: string
+              example: |
+                <div>
+                  <h3>Battery Health: Excellent</h3>
+                  <p>Capacity: 98%</p>
+                  <p>Cycles: 42</p>
+                  <p>Temperature: 22°C</p>
+                </div>
+
+  /api/charging/status:
+    get:
+      summary: Get charging status
+      description: Returns current charging status
+      tags:
+        - Charging
+      responses:
+        '200':
+          description: Charging status HTML fragment
+          content:
+            text/html:
+              schema:
+                type: string
+              example: |
+                <div>
+                  <h2>Charging: Active</h2>
+                  <p>Power: 50 kW</p>
+                  <p>Level: 75%</p>
+                  <p>Time Remaining: 25 minutes</p>
+                </div>
+
+  /api/charging/start:
+    post:
+      summary: Start charging
+      description: Starts vehicle charging
+      tags:
+        - Charging
+      responses:
+        '200':
+          description: Charging started successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionResponse'
+              example:
+                success: true
+                message: "Charging started"
+        '500':
+          description: Failed to start charging
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/charging/stop:
+    post:
+      summary: Stop charging
+      description: Stops vehicle charging
+      tags:
+        - Charging
+      responses:
+        '200':
+          description: Charging stopped successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionResponse'
+              example:
+                success: true
+                message: "Charging stopped"
+
+  /api/charging/history:
+    get:
+      summary: Get charging history
+      description: Returns recent charging sessions
+      tags:
+        - Charging
+      responses:
+        '200':
+          description: Charging history HTML fragment
+          content:
+            text/html:
+              schema:
+                type: string
+              example: |
+                <div class="history-list">
+                  <div class="session">
+                    <p>Nov 17, 2025 - 8:00 AM</p>
+                    <p>45 minutes, 35 kWh, €8.40</p>
+                  </div>
+                </div>
+
+  /api/precondition:
+    post:
+      summary: Pre-condition cabin
+      description: Starts cabin pre-conditioning (heating/cooling)
+      tags:
+        - Vehicle
+      responses:
+        '200':
+          description: Pre-conditioning started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionResponse'
+              example:
+                success: true
+                message: "Pre-conditioning started"
+
+  /api/alerts/active:
+    get:
+      summary: Get active alerts
+      description: Returns current active charging alerts
+      tags:
+        - Alerts
+      responses:
+        '200':
+          description: Active alerts HTML fragment
+          content:
+            text/html:
+              schema:
+                type: string
+              example: |
+                <div class="alerts">
+                  <div class="alert">⚡ 80% charge reached</div>
+                </div>
+
+  /api/alerts/save:
+    post:
+      summary: Save alert configuration
+      description: Updates charging alert settings
+      tags:
+        - Alerts
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                enable_80_percent:
+                  type: boolean
+                  description: Enable 80% optimal charge alert
+                custom_level:
+                  type: integer
+                  minimum: 50
+                  maximum: 100
+                  description: Custom alert level percentage
+                quiet_hours_start:
+                  type: string
+                  format: time
+                  description: Quiet hours start time (HH:MM)
+                quiet_hours_end:
+                  type: string
+                  format: time
+                  description: Quiet hours end time (HH:MM)
+      responses:
+        '200':
+          description: Alert settings saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionResponse'
+              example:
+                success: true
+                message: "Alert settings saved"
+
+  /api/analytics/weekly:
+    get:
+      summary: Get weekly statistics
+      description: Returns weekly charging and usage statistics
+      tags:
+        - Analytics
+      responses:
+        '200':
+          description: Weekly stats HTML fragment
+          content:
+            text/html:
+              schema:
+                type: string
+              example: |
+                <div class="stats">
+                  <p>Sessions: 12</p>
+                  <p>Total Energy: 240 kWh</p>
+                  <p>Distance: 1,200 km</p>
+                </div>
+
+  /api/analytics/costs:
+    get:
+      summary: Get cost analysis
+      description: Returns charging cost breakdown and analysis
+      tags:
+        - Analytics
+      responses:
+        '200':
+          description: Cost analysis HTML fragment
+          content:
+            text/html:
+              schema:
+                type: string
+              example: |
+                <div class="costs">
+                  <p>This Week: €28.50</p>
+                  <p>This Month: €95.20</p>
+                  <p>Cost per kWh: €0.24</p>
+                  <p>Savings vs Gasoline: €156.00</p>
+                </div>
+
+  /api/analytics/efficiency:
+    get:
+      summary: Get efficiency metrics
+      description: Returns energy efficiency metrics
+      tags:
+        - Analytics
+      responses:
+        '200':
+          description: Efficiency metrics HTML fragment
+          content:
+            text/html:
+              schema:
+                type: string
+              example: |
+                <div class="efficiency">
+                  <p>Consumption: 20 kWh/100km</p>
+                  <p>Charging Efficiency: 92%</p>
+                  <p>Regeneration: 18%</p>
+                  <p>CO₂ Saved: 45 kg</p>
+                </div>
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+          description: Service health status
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp of health check
+        version:
+          type: string
+          description: Application version
+        component:
+          type: string
+          description: Component name
+      example:
+        status: healthy
+        timestamp: "2025-11-17T12:00:00Z"
+        version: "1.0.0"
+        component: "web-ui"
+
+    MetricsResponse:
+      type: object
+      properties:
+        uptime_seconds:
+          type: integer
+          description: Service uptime in seconds
+        requests_total:
+          type: integer
+          description: Total number of requests
+        requests_success:
+          type: integer
+          description: Successful requests
+        requests_error:
+          type: integer
+          description: Failed requests
+        cache_hit_rate:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Cache hit rate (0-1)
+      example:
+        uptime_seconds: 3600
+        requests_total: 1000
+        requests_success: 995
+        requests_error: 5
+        cache_hit_rate: 0.85
+
+    ActionResponse:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+          description: Whether the action succeeded
+        message:
+          type: string
+          description: Human-readable message
+      example:
+        success: true
+        message: "Operation completed successfully"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+        details:
+          type: string
+          description: Additional error details
+      example:
+        error: "Operation failed"
+        details: "Connection timeout"
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token authentication (future implementation)
+
+# Future: Add security requirements when authentication is implemented
+# security:
+#   - bearerAuth: []
+
+externalDocs:
+  description: Full project documentation
+  url: https://github.com/avrabe/spin_myT2ABRP

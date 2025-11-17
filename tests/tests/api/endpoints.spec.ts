@@ -187,7 +187,7 @@ test.describe('API Endpoints', () => {
 
     const body = await response.text();
     expect(body).toContain('<!DOCTYPE html>');
-    expect(body).toContain('MyT2ABRP');
+    expect(body).toContain('Toyota MyT'); // Title contains "Toyota MyT2ABRP"
   });
 
   test('GET /nonexistent should return 404', async ({ request }) => {

@@ -7,7 +7,8 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Charging Features', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle');
     // Navigate to charging section if not default
   });
 

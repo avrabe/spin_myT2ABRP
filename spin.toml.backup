@@ -11,13 +11,13 @@ base = "/"
 
 [variables]
 # JWT secret for token signing (CRITICAL: set to random value in production)
-jwt_secret = { default = "dev-secret-change-in-production", secret = true }
+jwt_secret = { required = false, secret = true }
 # HMAC key for secure username hashing (CRITICAL: set to random value in production)
-hmac_key = { default = "dev-hmac-key-change-in-production", secret = true }
+hmac_key = { required = false, secret = true }
 # CORS allowed origin (set to your domain, defaults to * which is insecure)
-cors_origin = { default = "*" }
+cors_origin = { required = false }
 # VIN is still required unless using /vehicles endpoint only
-vin = { default = "" }
+vin = { required = false }
 
 # Web UI Component (HTMX Dashboard)
 [[trigger.http]]
@@ -37,10 +37,9 @@ route = "/api/..."
 component = "web-ui"
 
 # Main API Component (Toyota Integration)
-# NOTE: Temporarily disabled - requires Bazel setup with WIT files
-# [[trigger.http]]
-# route = "/..."
-# component = "myt2abrp"
+[[trigger.http]]
+route = "/..."
+component = "myt2abrp"
 
 [component.web-ui]
 source = "web-ui/target/wasm32-wasip2/release/web_ui.wasm"
@@ -49,18 +48,18 @@ allowed_outbound_hosts = []
 command = "cd web-ui && cargo build --target wasm32-wasip2 --release"
 watch = ["web-ui/src/**/*.rs", "web-ui/static/**/*"]
 
-# [component.myt2abrp]
-# source = "bazel-bin/myt2abrp_app.wasm"
-# allowed_outbound_hosts = [
-#     "https://b2c-login.toyota-europe.com",
-#     "https://ctpa-oneapi.tceu-ctp-prd.toyotaconnectedeurope.io"
-# ]
-# key_value_stores = ["default"]
-# [component.myt2abrp.build]
-# command = "./build.sh"
-# watch = ["components/**/src/**/*.rs", "components/**/wit/**/*.wit", "BUILD.bazel", "components/**/BUILD.bazel", "build.sh"]
-# [component.myt2abrp.variables]
-# jwt_secret = "{{ jwt_secret }}"
-# hmac_key = "{{ hmac_key }}"
-# cors_origin = "{{ cors_origin }}"
-# vin = "{{ vin }}"
+[component.myt2abrp]
+source = "bazel-bin/myt2abrp_app.wasm"
+allowed_outbound_hosts = [
+    "https://b2c-login.toyota-europe.com",
+    "https://ctpa-oneapi.tceu-ctp-prd.toyotaconnectedeurope.io"
+]
+key_value_stores = ["default"]
+[component.myt2abrp.build]
+command = "./build.sh"
+watch = ["components/**/src/**/*.rs", "components/**/wit/**/*.wit", "BUILD.bazel", "components/**/BUILD.bazel", "build.sh"]
+[component.myt2abrp.variables]
+jwt_secret = "{{ jwt_secret }}"
+hmac_key = "{{ hmac_key }}"
+cors_origin = "{{ cors_origin }}"
+vin = "{{ vin }}"

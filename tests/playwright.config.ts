@@ -11,14 +11,14 @@ export default defineConfig({
   timeout: 30 * 1000,
 
   // Test execution settings
-  fullyParallel: true,
+  fullyParallel: false, // Run tests sequentially to avoid overwhelming server
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1, // Use single worker to prevent server overload from HTMX polling
 
   // Reporter configuration
   reporter: [
-    ['html', { outputFolder: 'test-results/html' }],
+    ['html', { outputFolder: 'playwright-report' }],
     ['json', { outputFile: 'test-results/results.json' }],
     ['list']
   ],
@@ -65,7 +65,7 @@ export default defineConfig({
 
   // Web server configuration - starts Spin app before tests
   webServer: {
-    command: 'cd .. && spin build && spin up',
+    command: 'cd .. && export PATH="$HOME/bin:$PATH" && spin build && spin up',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,

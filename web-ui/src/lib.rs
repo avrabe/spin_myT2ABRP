@@ -5,6 +5,7 @@ use spin_sdk::http::{IntoResponse, Method, Request, ResponseBuilder};
 use spin_sdk::http_component;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use chrono::Utc;
 
 // Vehicle Status
 #[derive(Serialize)]
@@ -192,11 +193,35 @@ fn handle_request(req: Request) -> anyhow::Result<impl IntoResponse> {
             })))
         }
 
+        // Health Check & Monitoring Endpoints
+        (Method::Get, "/health") | (Method::Get, "/api/health") => {
+            Ok(json_response_with_security(&json!({
+                "status": "healthy",
+                "timestamp": Utc::now().to_rfc3339(),
+                "version": env!("CARGO_PKG_VERSION"),
+                "component": "web-ui"
+            })))
+        }
+
+        (Method::Get, "/api/metrics") => {
+            Ok(json_response_with_security(&json!({
+                "uptime_seconds": 0, // Would be tracked in actual implementation
+                "requests_total": 0,
+                "requests_success": 0,
+                "requests_error": 0,
+                "cache_hit_rate": 0.0
+            })))
+        }
+
         // 404 for unknown routes
-        _ => Ok(ResponseBuilder::new(404)
-            .header("content-type", "text/html")
-            .body("<h1>404 Not Found</h1>")
-            .build()),
+        _ => {
+            eprintln!("[404] Unknown route: {:?} {}", method, path);
+            Ok(ResponseBuilder::new(404)
+                .header("content-type", "text/html")
+                .header("X-Content-Type-Options", "nosniff")
+                .body("<h1>404 Not Found</h1>")
+                .build())
+        }
     }
 }
 
@@ -228,6 +253,19 @@ fn html_response(html: &str) -> spin_sdk::http::Response {
 fn json_response(value: &serde_json::Value) -> spin_sdk::http::Response {
     ResponseBuilder::new(200)
         .header("content-type", "application/json")
+        .body(value.to_string())
+        .build()
+}
+
+// Helper: JSON response with security headers
+fn json_response_with_security(value: &serde_json::Value) -> spin_sdk::http::Response {
+    ResponseBuilder::new(200)
+        .header("content-type", "application/json")
+        .header("X-Content-Type-Options", "nosniff")
+        .header("X-Frame-Options", "DENY")
+        .header("X-XSS-Protection", "1; mode=block")
+        .header("Referrer-Policy", "strict-origin-when-cross-origin")
+        .header("Cache-Control", "no-store, no-cache, must-revalidate")
         .body(value.to_string())
         .build()
 }

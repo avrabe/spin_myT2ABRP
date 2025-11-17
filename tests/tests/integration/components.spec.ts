@@ -8,7 +8,8 @@ import { test, expect } from '@playwright/test';
 test.describe('Component Integration', () => {
   test('web-ui component should serve static files', async ({ page }) => {
     // Request homepage
-    const response = await page.goto('/');
+    const response = await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle');
 
     expect(response?.ok()).toBeTruthy();
     expect(response?.status()).toBe(200);
@@ -24,7 +25,8 @@ test.describe('Component Integration', () => {
   });
 
   test('HTMX should load and be active', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle');
 
     // HTMX should be loaded
     const htmxLoaded = await page.evaluate(() => {
@@ -35,7 +37,8 @@ test.describe('Component Integration', () => {
   });
 
   test('HTMX polling should work', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle');
 
     // Find element with hx-trigger="every"
     const pollingElement = page.locator('[hx-get][hx-trigger*="every"]').first();
@@ -53,7 +56,8 @@ test.describe('Component Integration', () => {
   });
 
   test('HTMX should swap content correctly', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle');
 
     // Find a button with hx-post
     const actionButton = page.locator('[hx-post]').first();
@@ -71,7 +75,8 @@ test.describe('Component Integration', () => {
   });
 
   test('navigation should preserve state', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle');
 
     // Navigate to different sections
     await page.click('text=Analytics');
@@ -88,7 +93,8 @@ test.describe('Component Integration', () => {
   });
 
   test('form submissions should work via HTMX', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle');
     await page.click('text=Settings');
 
     // Find a form
@@ -126,7 +132,8 @@ test.describe('Component Integration', () => {
   });
 
   test('CSS should be applied correctly', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle');
 
     // Check if Toyota red color is applied
     const element = page.locator('body, .header, h1').first();
@@ -144,7 +151,8 @@ test.describe('Component Integration', () => {
   test('responsive design should work on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
 
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle');
 
     // Content should adapt to mobile
     const body = page.locator('body');
@@ -167,7 +175,8 @@ test.describe('Component Integration', () => {
   });
 
   test('PWA should be installable', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle');
 
     // Check for manifest
     const manifest = page.locator('link[rel="manifest"]');
@@ -186,7 +195,8 @@ test.describe('Component Integration', () => {
   });
 
   test('API and web-ui should be on same origin', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle');
 
     // Make API request from page
     const apiResponse = await page.evaluate(async () => {
@@ -239,7 +249,8 @@ test.describe('Component Integration', () => {
   });
 
   test('long polling should not block other requests', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle');
 
     // Start long-polling requests
     const pollingElement = page.locator('[hx-trigger*="every"]').first();
@@ -255,7 +266,8 @@ test.describe('Component Integration', () => {
   });
 
   test('memory usage should be stable', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle');
 
     // Get initial memory (if available)
     const initialMetrics = await page.evaluate(() => {
