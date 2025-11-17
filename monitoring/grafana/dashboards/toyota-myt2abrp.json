@@ -1,0 +1,121 @@
+{
+  "dashboard": {
+    "title": "Toyota MyT2ABRP Dashboard",
+    "tags": ["toyota", "wasm", "spin"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[5m])",
+            "legendFormat": "{{method}} {{endpoint}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{status=~\"5..\"}[5m])",
+            "legendFormat": "{{status}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "thresholds": [
+          {"value": 0.01, "color": "yellow"},
+          {"value": 0.05, "color": "red"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Latency Percentiles",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "P50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "P95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "P99"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "Component Health",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "up{job=\"toyota-myt2abrp-api\"}",
+            "legendFormat": "API Status"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 8},
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none"
+        }
+      },
+      {
+        "id": 5,
+        "title": "Circuit Breaker State",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "circuit_breaker_state",
+            "legendFormat": "{{component}}"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 8}
+      },
+      {
+        "id": 6,
+        "title": "Retry Attempts",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(retry_attempts_total[5m])",
+            "legendFormat": "{{operation}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 7,
+        "title": "Validation Success Rate",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "rate(validation_successes_total[5m]) / rate(validation_attempts_total[5m])",
+            "legendFormat": "Success Rate"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "options": {
+          "min": 0,
+          "max": 1,
+          "thresholds": [
+            {"value": 0.8, "color": "red"},
+            {"value": 0.9, "color": "yellow"},
+            {"value": 0.95, "color": "green"}
+          ]
+        }
+      }
+    ],
+    "refresh": "10s",
+    "schemaVersion": 27,
+    "version": 1
+  }
+}

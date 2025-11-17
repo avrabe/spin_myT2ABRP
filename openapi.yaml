@@ -1,0 +1,551 @@
+openapi: 3.0.3
+info:
+  title: Toyota MyT2ABRP API
+  version: 0.1.0
+  description: |
+    Toyota MyT to ABRP (A Better Route Planner) integration API.
+
+    This API provides vehicle telemetry data transformation and validation
+    services for electric vehicles, enabling seamless integration between
+    Toyota's connected car platform and ABRP route planning service.
+
+    ## Features
+    - Vehicle data validation
+    - Telemetry transformation (Toyota format ↔ ABRP format)
+    - Circuit breaker and retry logic for resilience
+    - Prometheus-compatible metrics
+    - JWT-based authentication
+
+  contact:
+    name: Toyota MyT2ABRP Team
+    url: https://github.com/avrabe/spin_myT2ABRP
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+  - url: https://api.toyota-myt2abrp.example.com
+    description: Production server
+  - url: https://staging-api.toyota-myt2abrp.example.com
+    description: Staging server
+
+tags:
+  - name: health
+    description: Health check and status endpoints
+  - name: validation
+    description: Data validation services
+  - name: transformation
+    description: Data transformation services
+  - name: metrics
+    description: Metrics and observability
+  - name: testing
+    description: Testing and debugging endpoints
+
+paths:
+  /:
+    get:
+      summary: API root endpoint
+      description: Returns API information and version
+      tags:
+        - health
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiInfo'
+              example:
+                message: "Toyota MyT2ABRP Test Component"
+                version: "0.1.0"
+                status: "ok"
+
+  /health:
+    get:
+      summary: Health check
+      description: Returns the health status of the API
+      tags:
+        - health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "healthy"
+                timestamp: "2025-11-16T00:00:00Z"
+
+  /status:
+    get:
+      summary: Service status
+      description: Returns detailed service status information
+      tags:
+        - health
+      responses:
+        '200':
+          description: Service status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+              example:
+                version: "0.1.0"
+                components: ["test-http"]
+                framework: "spin"
+
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      description: Returns Prometheus-compatible metrics
+      tags:
+        - metrics
+      responses:
+        '200':
+          description: Metrics data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsResponse'
+              example:
+                requests: 1
+                uptime: 100
+
+  /validate:
+    post:
+      summary: Validate vehicle data
+      description: Validates vehicle identification and telemetry data
+      tags:
+        - validation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateRequest'
+            examples:
+              basic:
+                summary: Basic validation request
+                value:
+                  vin: "TESTVIN123456789"
+                  data:
+                    battery_level: 85
+                    location:
+                      lat: 52.52
+                      lon: 13.405
+              minimal:
+                summary: Minimal request
+                value:
+                  vin: "TEST"
+                  data: {}
+      responses:
+        '200':
+          description: Validation successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResponse'
+              example:
+                valid: true
+                message: "Validation successful"
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Invalid request format"
+        '422':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+              example:
+                valid: false
+                message: "VIN validation failed"
+                errors:
+                  - field: "vin"
+                    message: "VIN must be 17 characters"
+
+  /transform:
+    post:
+      summary: Transform vehicle data
+      description: Transforms data between Toyota API and ABRP formats
+      tags:
+        - transformation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransformRequest'
+            example:
+              vin: "TESTVIN123456789"
+              telemetry:
+                battery_level: 85
+                location:
+                  lat: 52.52
+                  lon: 13.405
+      responses:
+        '200':
+          description: Transformation successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransformResponse'
+              example:
+                transformed: true
+                message: "Data transformed"
+                data:
+                  soc: 85
+                  lat: 52.52
+                  lon: 13.405
+
+  /api/test-retry:
+    get:
+      summary: Test retry logic
+      description: Endpoint for testing retry mechanisms
+      tags:
+        - testing
+      responses:
+        '200':
+          description: Retry test successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetryTestResponse'
+              example:
+                retry: "success"
+                attempts: 1
+
+  /api/force-failure:
+    get:
+      summary: Force failure
+      description: Endpoint that always fails (for circuit breaker testing)
+      tags:
+        - testing
+      responses:
+        '503':
+          description: Service unavailable (intentional)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Service unavailable"
+
+  /api/protected:
+    get:
+      summary: Protected endpoint
+      description: Requires authentication
+      tags:
+        - testing
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Access granted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProtectedResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Unauthorized"
+        '403':
+          description: Forbidden (invalid token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Invalid token"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT authentication token
+
+  schemas:
+    ApiInfo:
+      type: object
+      required:
+        - message
+        - version
+        - status
+      properties:
+        message:
+          type: string
+          description: API description
+          example: "Toyota MyT2ABRP Test Component"
+        version:
+          type: string
+          description: API version
+          pattern: '^\d+\.\d+\.\d+$'
+          example: "0.1.0"
+        status:
+          type: string
+          description: API status
+          enum: [ok, degraded, error]
+          example: "ok"
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+      properties:
+        status:
+          type: string
+          description: Health status
+          enum: [healthy, unhealthy, degraded]
+          example: "healthy"
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp of health check
+          example: "2025-11-16T00:00:00Z"
+
+    StatusResponse:
+      type: object
+      required:
+        - version
+        - components
+      properties:
+        version:
+          type: string
+          description: Service version
+          example: "0.1.0"
+        components:
+          type: array
+          description: List of active components
+          items:
+            type: string
+          example: ["test-http"]
+        framework:
+          type: string
+          description: Framework name
+          example: "spin"
+        uptime:
+          type: integer
+          description: Uptime in seconds
+          example: 3600
+
+    MetricsResponse:
+      type: object
+      properties:
+        requests:
+          type: integer
+          description: Total request count
+          example: 1000
+        uptime:
+          type: integer
+          description: Uptime in seconds
+          example: 3600
+        errors:
+          type: integer
+          description: Error count
+          example: 5
+        latency_p50:
+          type: number
+          format: float
+          description: 50th percentile latency (ms)
+          example: 3.2
+        latency_p95:
+          type: number
+          format: float
+          description: 95th percentile latency (ms)
+          example: 15.8
+        latency_p99:
+          type: number
+          format: float
+          description: 99th percentile latency (ms)
+          example: 45.2
+
+    ValidateRequest:
+      type: object
+      required:
+        - vin
+      properties:
+        vin:
+          type: string
+          description: Vehicle Identification Number
+          pattern: '^[A-HJ-NPR-Z0-9]{17}$'
+          example: "TESTVIN123456789"
+        data:
+          type: object
+          description: Vehicle telemetry data
+          additionalProperties: true
+
+    ValidationResponse:
+      type: object
+      required:
+        - valid
+        - message
+      properties:
+        valid:
+          type: boolean
+          description: Whether validation passed
+          example: true
+        message:
+          type: string
+          description: Validation message
+          example: "Validation successful"
+
+    ValidationErrorResponse:
+      type: object
+      required:
+        - valid
+        - message
+      properties:
+        valid:
+          type: boolean
+          description: Validation status
+          example: false
+        message:
+          type: string
+          description: Error message
+          example: "Validation failed"
+        errors:
+          type: array
+          description: List of validation errors
+          items:
+            $ref: '#/components/schemas/FieldError'
+
+    FieldError:
+      type: object
+      required:
+        - field
+        - message
+      properties:
+        field:
+          type: string
+          description: Field name that failed validation
+          example: "vin"
+        message:
+          type: string
+          description: Error message
+          example: "VIN must be 17 characters"
+        code:
+          type: string
+          description: Error code
+          example: "INVALID_LENGTH"
+
+    TransformRequest:
+      type: object
+      required:
+        - vin
+        - telemetry
+      properties:
+        vin:
+          type: string
+          description: Vehicle Identification Number
+          example: "TESTVIN123456789"
+        telemetry:
+          type: object
+          description: Vehicle telemetry data
+          properties:
+            battery_level:
+              type: integer
+              minimum: 0
+              maximum: 100
+              description: Battery state of charge (%)
+              example: 85
+            location:
+              $ref: '#/components/schemas/Location'
+
+    Location:
+      type: object
+      required:
+        - lat
+        - lon
+      properties:
+        lat:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          description: Latitude
+          example: 52.52
+        lon:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          description: Longitude
+          example: 13.405
+
+    TransformResponse:
+      type: object
+      required:
+        - transformed
+        - message
+      properties:
+        transformed:
+          type: boolean
+          description: Whether transformation succeeded
+          example: true
+        message:
+          type: string
+          description: Transformation message
+          example: "Data transformed"
+        data:
+          type: object
+          description: Transformed data
+          additionalProperties: true
+
+    RetryTestResponse:
+      type: object
+      required:
+        - retry
+        - attempts
+      properties:
+        retry:
+          type: string
+          description: Retry status
+          example: "success"
+        attempts:
+          type: integer
+          description: Number of attempts
+          example: 1
+
+    ProtectedResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Access granted"
+        user:
+          type: string
+          example: "authenticated-user"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: "An error occurred"
+        code:
+          type: string
+          description: Error code
+          example: "INTERNAL_ERROR"
+        details:
+          type: object
+          description: Additional error details
+          additionalProperties: true

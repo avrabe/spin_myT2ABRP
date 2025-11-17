@@ -1,0 +1,50 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Build artifacts
+target/
+bazel-*
+.bazel*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+.spin/logs/
+
+# Node
+node_modules/
+npm-debug.log
+package-lock.json
+
+# Test results
+test-results/
+tests/e2e/test-results/
+
+# Documentation build artifacts
+docs/_build/
+site/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+Cargo.lock (keep for production)
