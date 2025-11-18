@@ -78,6 +78,8 @@ jobs:
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
+          toolchain: stable
+          target: wasm32-wasip2
           components: rustfmt, clippy
 
       - name: Check Rust formatting
@@ -88,4 +90,4 @@ jobs:
       - name: Run Clippy
         run: |
           cd web-ui
-          cargo clippy -- -D warnings
+          cargo clippy --target wasm32-wasip2 -- -D warnings
