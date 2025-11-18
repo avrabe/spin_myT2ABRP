@@ -46,7 +46,7 @@ mod tests {
 
     #[test]
     fn test_gateway_stub() {
-        let gateway = GatewayStub::new();
+        let _gateway = GatewayStub::new();
         assert!(GatewayStub::health().contains("healthy"));
     }
 }

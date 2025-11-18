@@ -132,21 +132,25 @@ pub fn mock_vehicle_list_response() -> String {
 }
 
 /// Create test user credentials
+#[allow(dead_code)]
 pub fn test_credentials() -> (&'static str, &'static str) {
     ("test@example.com", "test-password-123")
 }
 
 /// Create invalid credentials for testing
+#[allow(dead_code)]
 pub fn invalid_credentials() -> (&'static str, &'static str) {
     ("", "") // Empty credentials should fail validation
 }
 
 /// Generate a test VIN
+#[allow(dead_code)]
 pub fn test_vin() -> &'static str {
     "TEST1234567890ABC"
 }
 
 /// Create a test timestamp (2025-01-15 12:00:00 UTC)
+#[allow(dead_code)]
 pub fn test_timestamp() -> i64 {
     1736942400
 }
