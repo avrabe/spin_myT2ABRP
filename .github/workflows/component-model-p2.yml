@@ -65,7 +65,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Download component artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: wasm-components-p2
           path: target/wasm32-wasip1/release/
@@ -122,7 +122,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Download component artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: wasm-components-p2
           path: target/wasm32-wasip1/release/
