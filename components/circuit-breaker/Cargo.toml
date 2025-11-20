@@ -8,7 +8,7 @@ license = "MIT"
 crate-type = ["cdylib"]
 
 [dependencies]
-wit-bindgen-rt = { version = "0.41.0", features = ["bitflags"] }
+wit-bindgen-rt = { version = "0.43.0", features = ["bitflags"] }
 
 [package.metadata.component]
 package = "toyota:circuit-breaker"

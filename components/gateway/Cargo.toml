@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 [dependencies]
 # Pure Component Model dependencies (no spin-sdk)
 wit-bindgen = { version = "0.41.0", default-features = false, features = ["macros"] }
-wit-bindgen-rt = { version = "0.41.0", features = ["bitflags"] }
+wit-bindgen-rt = { version = "0.43.0", features = ["bitflags"] }
 
 [package.metadata.component]
 package = "toyota:gateway"
