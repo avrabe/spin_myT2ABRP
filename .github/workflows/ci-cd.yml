@@ -122,7 +122,7 @@ jobs:
           fi
 
       - name: Upload WASM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: web-ui-wasm
           path: web-ui/target/wasm32-wasip2/release/web_ui.wasm
@@ -178,7 +178,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: test-results-${{ matrix.browser }}
           path: tests/test-results/
@@ -186,7 +186,7 @@ jobs:
 
       - name: Upload test report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: test-report-${{ matrix.browser }}
           path: tests/playwright-report/
@@ -231,7 +231,7 @@ jobs:
           ./benchmark.sh > benchmark-results.txt
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: benchmark-results
           path: benchmark-results.txt
