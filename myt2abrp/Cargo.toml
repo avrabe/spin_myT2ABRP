@@ -15,7 +15,7 @@ anyhow = { workspace = true }
 # Crate to simplify working with bytes.
 bytes = { workspace = true }
 # General-purpose crate with common HTTP types.
-http = "1.2.0"
+http = "1.4.0"
 # The Spin SDK.
 spin-sdk = { workspace = true }
 # Base64 encoding/decoding
