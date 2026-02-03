@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 wit-bindgen-rt = "0.43.0"
 
 # JWT operations - NO spin-sdk dependency!
-jsonwebtoken = { version = "10.2.0", default-features = false, features = ["rust_crypto"] }
+jsonwebtoken = { version = "10.3.0", default-features = false, features = ["rust_crypto"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
